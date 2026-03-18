@@ -44,15 +44,3 @@ class SteamFetcher:
         tasks = [self.fetch_item(session, item) for item in item_list]
         results = await asyncio.gather(*tasks)
         return results
-
-async def main():
-    cs_fetcher = SteamFetcher(appid=730, currency=5)
-    
-    async with aiohttp.ClientSession() as session:
-        item_list = ["AK-47 | Redline (Field-Tested)", "Revolution Case", "Glove Case", "AK-47 | Ice Coaled (Field-Tested)", "Prisma 2 Case"]
-        result = await cs_fetcher.fetch_all(session, item_list)
-        
-        if result:
-            print(f"Данные получены: {result}")
-        else:
-            print("Не удалось получить данные.")
