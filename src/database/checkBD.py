@@ -3,57 +3,49 @@ import sqlite3
 con = sqlite3.connect("bazaIvanaNesveteeva.db")
 cursor = con.cursor()
 
-# 1. Проверяем, есть ли таблицы
+print("=" * 50)
+print("ПРОВЕРКА БАЗЫ ДАННЫХ (2 таблицы)")
+print("=" * 50)
+
+# Проверяем таблицы
 cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
 tables = cursor.fetchall()
+print(f"\n📋 Таблицы: {[t[0] for t in tables]}")
 
-print("=" * 50)
-print("ПРОВЕРКА БАЗЫ ДАННЫХ")
-print("=" * 50)
+# Структура items
+print("\n--- Таблица: items ---")
+cursor.execute("PRAGMA table_info(items)")
+for col in cursor.fetchall():
+    print(f"   {col[1]} ({col[2]})")
 
-if tables:
-    print(f"\n✅ Найдены таблицы: {[t[0] for t in tables]}")
-else:
-    print("\n⚠️ Таблицы не найдены. База данных пустая.")
-    con.close()
-    exit()
+# Структура item_prices
+print("\n--- Таблица: item_prices ---")
+cursor.execute("PRAGMA table_info(item_prices)")
+for col in cursor.fetchall():
+    print(f"   {col[1]} ({col[2]})")
 
-# 2. Проверяем структуру таблицы steam_items
-try:
-    cursor.execute("PRAGMA table_info(steam_items)")
-    columns = cursor.fetchall()
-    print(f"\n📋 Структура таблицы steam_items:")
-    for col in columns:
-        print(f"   {col[1]} ({col[2]})")
-except:
-    print("\n❌ Таблица steam_items не существует!")
-    con.close()
-    exit()
+# Количество записей
+cursor.execute("SELECT COUNT(*) FROM items")
+items_count = cursor.fetchone()[0]
+cursor.execute("SELECT COUNT(*) FROM item_prices")
+prices_count = cursor.fetchone()[0]
 
-# 3. Считаем количество записей
-cursor.execute("SELECT COUNT(*) FROM steam_items")
-count = cursor.fetchone()[0]
-print(f"\n📊 Количество записей в таблице: {count}")
+print(f"\n📊 Статистика:")
+print(f"   Предметов в items: {items_count}")
+print(f"   Записей цен в item_prices: {prices_count}")
 
-# 4. Показываем первые 10 записей
-if count > 0:
-    cursor.execute("SELECT * FROM steam_items LIMIT 10")
-    rows = cursor.fetchall()
-    print(f"\n📝 Первые {len(rows)} записей:")
-    print("-" * 50)
-    
-    # Получаем названия колонок
-    cursor.execute("PRAGMA table_info(steam_items)")
-    col_names = [col[1] for col in cursor.fetchall()]
-    
-    for row in rows:
-        print("\nЗапись:")
-        for i, value in enumerate(row):
-            if i < len(col_names):
-                print(f"   {col_names[i]}: {value}")
-        print("-" * 30)
-else:
-    print("\n⚠️ Таблица steam_items пуста. Нет данных для отображения.")
+# Показываем связанные данные
+if items_count > 0:
+    print(f"\n📝 Примеры данных:")
+    cursor.execute("""
+        SELECT i.id, i.name, p.price, p.fetched_at
+        FROM items i
+        LEFT JOIN item_prices p ON i.id = p.item_id
+        LIMIT 5
+    """)
+    for row in cursor.fetchall():
+        price_str = f"{row[2]} руб." if row[2] else "нет цены"
+        print(f"   ID:{row[0]} | {row[1][:30]:<30} | {price_str}")
 
 con.close()
 print("\n✅ Проверка завершена")
