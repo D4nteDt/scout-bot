@@ -1,27 +1,45 @@
 import asyncio
 import aiohttp
-import configs
-
+from config.configs import items_to_track
+from database.database import AsyncSessionLocal
+from database.models import Item, ItemHistory
 from parser.fetcher import SteamFetcher
+from sqlalchemy import select
+
+async def process_steam_data(results_parser):
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            for data in results_parser:
+                if not data: continue
+                
+                stmt = select(Item).where(Item.market_hash_name == data['name'])
+                result = await session.execute(stmt)
+                item = result.scalar_one_or_none()
+                
+                if not item:
+                    item = Item(market_hash_name=data['name'], name=data['name'])
+                    session.add(item)
+                    await session.flush()
+                
+                history = ItemHistory(
+                    item_id=item.id,
+                    price=data['price']
+                )
+                session.add(history)
+                
+                print(f"-> {data['name']}: {data['price']} $ [SAVED]")
 
 async def main():
-    app_id = configs.APP_ID
-    currency = configs.CURRENCY
-    items = configs.ITEMS_TO_TRACK
-    
-    fetcher = SteamFetcher(appid=app_id, currency=currency)
-    
     async with aiohttp.ClientSession() as session:
-        print(f"Начинаем сбор данных для {len(items)} предметов...")
-        
-        all_items_data = await fetcher.fetch_all(session, items)
-        
-        successful_data = [item for item in all_items_data if item is not None]
-        
-        print(f"Получены данные для {len(successful_data)} предметов.")
-
-        for item_data in successful_data:
-            print(item_data)
+        while True:
+            print("\n--- Запуск цикла обновления цен ---")
+            
+            results = await SteamFetcher().fetch_all(session, items_to_track)
+            
+            await process_steam_data(results)
+            
+            print("Спим 30 секунд...")
+            await asyncio.sleep(30)
 
 if __name__ == "__main__":
     asyncio.run(main())
