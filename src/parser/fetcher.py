@@ -33,15 +33,17 @@ class SteamFetcher:
                     return None
             
                 data = await response.json()
-                if data and data.get("success"):
+                volume = self._clean_volume(data.get("volume"))
+                if data and data.get("success") and volume > 0:
                     return {
                         "name": item_name,
                         "price": self._clean_price(data.get("lowest_price")),
                         "median": self._clean_price(data.get("median_price")),
-                        "volume": self._clean_volume(data.get("volume"))
+                        "volume": volume
                     }
                 return None
     async def fetch_all(self, session, item_list):
         tasks = [self.fetch_item(session, item) for item in item_list]
         results = await asyncio.gather(*tasks)
+        print(results)
         return results
