@@ -19,5 +19,3 @@ def hampel_filter(data: list, window_size: int) -> list:
         if (local_mad != 0) and (abs(filtered_data[i] - local_median)> k_mad * local_mad * 3):
             filtered_data[i] = float(local_median)
     return filtered_data
-
-print(hampel_filter([100, 101, 102, 550, 600, 101, 104], 3))
