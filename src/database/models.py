@@ -25,6 +25,7 @@ class User(Base):
 class Item(Base):
     __tablename__ = "items"
     id: Mapped[int] = mapped_column(primary_key=True)
+    price: Mapped[float] = mapped_column(Float)
     market_hash_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     oracle_price: Mapped[float | None] = mapped_column(Float)
@@ -32,6 +33,7 @@ class Item(Base):
     history: Mapped[list["ItemHistory"]] = relationship(back_populates="item", cascade="all, delete-orphan")
     kalman_state_x: Mapped[str | None] = mapped_column(Text)
     kalman_state_p: Mapped[str | None] = mapped_column(Text)
+    last_updated: Mapped[datetime] = mapped_column(datetime)
     def __repr__(self):
         return f"<Item(id={self.id}, name='{self.name}')>"
 
