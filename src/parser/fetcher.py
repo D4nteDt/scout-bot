@@ -1,4 +1,3 @@
-import redis
 import asyncio
 import aiohttp
 from urllib.parse import quote
@@ -45,5 +44,4 @@ class SteamFetcher:
     async def fetch_all(self, session, item_list):
         tasks = [self.fetch_item(session, item) for item in item_list]
         results = await asyncio.gather(*tasks)
-        print(results)
         return results
