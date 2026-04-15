@@ -38,6 +38,9 @@ def kalman_filter(prices: list) -> list:
         filtered_prices.append(kf.x[0, 0])
     return filtered_prices
 
+def system_of_filters(prices: list) -> list:
+    return kalman_filter(hampel_filter(prices))
+
 def plot_results(original, filtered):
     plt.figure(figsize=(12, 6))
     plt.plot(original, label='Сырые цены (Steam)', color='blue', alpha=0.4)
