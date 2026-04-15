@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import ForeignKey, String, Float, DateTime, Table, Column
+from sqlalchemy import ForeignKey, String, Float, DateTime, Table, Column, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
@@ -30,7 +30,8 @@ class Item(Base):
     oracle_price: Mapped[float | None] = mapped_column(Float)
     trend: Mapped[float | None] = mapped_column(Float)
     history: Mapped[list["ItemHistory"]] = relationship(back_populates="item", cascade="all, delete-orphan")
-
+    kalman_state_x: Mapped[str | None] = mapped_column(Text)
+    kalman_state_p: Mapped[str | None] = mapped_column(Text)
     def __repr__(self):
         return f"<Item(id={self.id}, name='{self.name}')>"
 
