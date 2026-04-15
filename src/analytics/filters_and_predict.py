@@ -12,17 +12,17 @@ def calculate_local_stats(data_window:list) -> tuple[float, float]:
     return local_median, local_mad
 
 class Kalman_filter:
-    def __init__(self, R: float = 0.1, Q: float = 1.0, P: float = 1000.0):
+    def __init__(self, R: float = 0.1, Q: float = 1.0):
         self._kf = KalmanFilter(2, 1)
         self._kf.F = array([[1., 1.], [0., 1.]])
         self._kf.H = array([[1., 0.]])
         self._kf.R = array([[R]])
         self._kf.Q = Q_discrete_white_noise(dim=2, dt=1., var=Q)
-        self._kf.P = P
+        self._kf.P = 1000.0
     
     def initialize_state(self, initial_price: float) -> dict:
         self._kf.x = array([[initial_price], [0.]])
-        self._kf.P = self._kf.P * self.P
+        self._kf.P = self._kf.P * 1000.0
 
     def set_state_from_json(self, x_json: str, P_json: str):
         self._kf.x = array(json.loads(x_json))

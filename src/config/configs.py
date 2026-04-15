@@ -3,7 +3,7 @@ CURRENCY = 5
 
 items_to_track = [
     "Recoil Case",
-    "AK-47 | Redline (Factory New)",
     "Dreams & Nightmares Case",
+    "AK-47 | Redline (Factory New)",
     "AWP | Atheris (Factory New)"
 ]
