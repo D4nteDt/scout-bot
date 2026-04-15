@@ -35,7 +35,14 @@ class Kalman_filter:
         self._kf.predict()
         self._kf.update(measurement)
         return float(self._kf.x[0, 0])
-
+    
+    def predict_state(self, steps: int = 1) -> tuple[float, float]:
+        for i in range(steps):
+            self._kf.predict()
+        predicted_price = float(self._kf.x[0, 0])
+        predicted_trend = float(self._kf.x[1, 0])
+        return predicted_price, predicted_trend
+    
 def plot_results(original, filtered):
     plt.figure(figsize=(12, 6))
     plt.plot(original, label='Сырые цены (Steam)', color='blue', alpha=0.4)
