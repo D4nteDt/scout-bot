@@ -7,7 +7,8 @@ from database.models import Base, Item
 from processor import OracleProcessor 
 from database.database import engine, AsyncSessionLocal 
 from parser.fetcher import SteamFetcher
-from config.configs import items_to_track 
+from config.configs import items_to_track
+logging.basicConfig(level=logging.INFO)
 
 async def init_db(engine_obj):
     logging.info("Initializing database")
