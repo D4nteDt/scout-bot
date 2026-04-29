@@ -1,13 +1,15 @@
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-main_menu_keyboard = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="💰 Рынок CS2")],
-    [KeyboardButton(text="👤 Профиль"), KeyboardButton(text="Помощь")]
-], resize_keyboard=True, one_time_keyboard=False)
+def main_menu():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Добавить скин", callback_data="add_skin")
+    builder.button(text="Мои скины", callback_data="list_skins")
+    builder.adjust(1)
+    return builder.as_markup()
 
-inline = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="Поиск по названию", url= "")],
-    [InlineKeyboardButton(text="Мои отслеживания", url= "")],
-    [InlineKeyboardButton(text="Уведомления о ценах", url= "")],
-    [InlineKeyboardButton(text="Назад", url="")]
-])
+def skins_list_keyboard(items):
+    builder = InlineKeyboardBuilder()
+    for item in items:
+        builder.button(text=f"{item.name}", callback_data=f"view_{item.id}")
+    builder.adjust(2)
+    return builder.as_markup()

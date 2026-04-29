@@ -1,17 +1,41 @@
-from aiogram import F, Router
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message
-from src.bot.keyboards import main_menu_keyboard, inline
+from aiogram import Router, F, types
+from bot.keyboards import main_menu, skins_list_keyboard
+from processor import OracleProcessor
+from database.models import Item
+import select
 
 router = Router()
-@router.message(CommandStart())
-async def cmd_start(message: Message):
-    await message.answer(f"Привет, {message.from_user.first_name}! Я твой личный Scout-bot для CS2. Помогу тебе мониториь рынок скинов, анализировать цены и находить наиболее выгодные предложения. Что тебя интересует?", reply_markup=main_menu_keyboard)
 
-@router.message(Command('help'))
-async def get_help(message: Message):
-    await message.answer("Это команда /help")
+@router.callback_query(F.data == "list_skins")
+async def list_skins(callback: types.CallbackQuery, session_pool):
+    async with session_pool() as session:
+        result = await session.execute(select(Item))
+        items = result.scalars().all()
+        
+        await callback.message.answer(
+            "Выберите скин для анализа:", 
+            reply_markup=skins_list_keyboard(items)
+        )
 
-@router.message(F.text == "Рынок CS2")
-async def how_are_you(message: Message):
-    await message.answer("Отлично! Введите название интересующего вас предмета:", reply_markup=inline)
+@router.callback_query(F.data.startswith("view_"))
+async def view_item_details(callback: types.CallbackQuery, session_pool):
+    item_id = int(callback.data.split("_")[1])
+    
+    async with session_pool() as session:
+        processor = OracleProcessor(sql_session=session)
+        prediction = await processor.get_kalman_prediction(item_id)
+        item = await session.get(Item, item_id)
+        
+        if prediction:
+            price, trend = prediction
+            text = (f"Анализ: {item.name}**\n\n"
+                    f"Текущая цена: {item.current_price:.2f}\n"
+                    f"Оракул (Калман): {item.oracle_price:.2f}\n"
+                    f"Прогноз тренда: {'Вверх' if trend > 0 else 'Вниз'} ({trend:.4f})")
+            
+            # Сюда же в будущем прикрутим отправку графика (через pyplot)
+            await callback.message.answer(text, parse_mode="Markdown")
+
+@router.callback_query(F.data == "back_to_main")
+async def back_to_main(callback: types.CallbackQuery):
+    await callback.message.edit_text("Главное меню Оракула:", reply_markup=main_menu())

@@ -3,6 +3,7 @@ from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 import matplotlib.pyplot as plt
 import json
+import io
 
 def calculate_local_stats(data_window:list) -> tuple[float, float]:
     if not data_window:
@@ -43,13 +44,14 @@ class Kalman_filter:
         predicted_trend = float(self._kf.x[1, 0])
         return predicted_price, predicted_trend
     
-def plot_results(original, filtered):
+def plot_results(original:list , filtered: list):
     plt.figure(figsize=(12, 6))
-    plt.plot(original, label='Сырые цены (Steam)', color='blue', alpha=0.4)
-    plt.plot(filtered, label='Фильтр (Оракул)', color='red', linewidth=2)
-    plt.title('Очистка цен')
-    plt.xlabel('Время (точки измерения)')
-    plt.ylabel('Цена')
+    plt.plot(original, label='Original', color='blue', alpha=0.4)
+    plt.plot(filtered, label='Filtered', color='red', linewidth=2)
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.7)
-    plt.show()
+    result = io.BytesIO()
+    plt.savefig(result, format='png')
+    result.seek(0)
+    plt.close()
+    return result

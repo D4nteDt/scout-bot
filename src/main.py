@@ -1,6 +1,8 @@
 import asyncio
 import aiohttp
 import logging
+from bot.bot import dp, bot
+from bot.handlers import router
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database.models import Base, Item
@@ -63,38 +65,30 @@ async def process_and_update_prices(session: AsyncSession, processor: OracleProc
         else:
             logging.error(f"Could not obtain item ID for item '{item_name}'. Skipping update.")
 
+async def run_parser_loop():
+    logging.info("Starting Steam Parser Loop")
+    async with aiohttp.ClientSession() as http_session:
+        while True:
+            try:
+                fetcher = SteamFetcher()
+                fetched_data = await fetcher.fetch_all(http_session, items_to_track)
+                if fetched_data:
+                    async with AsyncSessionLocal() as session:
+                        processor = OracleProcessor(sql_session=session)
+                        await process_and_update_prices(session, processor, fetched_data)
+            except Exception as e:
+                logging.error(f"Parser Error: {e}")
+            await asyncio.sleep(30)
 
 async def main():
-    logging.info("Starting main application loop")
-
     await init_db(engine)
+    dp.include_router(router)
+    logging.info("System is starting...")
+    parser_task = asyncio.create_task(run_parser_loop())
     try:
-        async with aiohttp.ClientSession() as http_session:
-            while True:
-                logging.info("Starting price update cycle")
-                try:
-                    fetcher = SteamFetcher()
-                    fetched_data = await fetcher.fetch_all(http_session, items_to_track)
-                    if not fetched_data:
-                        logging.warning("No data fetched from Steam. Waiting for next cycle.")
-                    else:
-                        async with AsyncSessionLocal() as session:
-                            processor = OracleProcessor(sql_session=session)
-                            await process_and_update_prices(session, processor, fetched_data)
-                except Exception as e:
-                    logging.error(f"Error during fetching or processing Steam data: {e}", exc_info=True)
-                sleep_time = 30
-                logging.info(f"Price update cycle finished. Sleeping for {sleep_time} seconds")
-                await asyncio.sleep(sleep_time)
-
-    except asyncio.CancelledError:
-        logging.info("Main loop cancelled. Shutting down.")
-    except Exception as e:
-        logging.critical(f"An unexpected critical error occurred in the main loop: {e}", exc_info=True)
+        await dp.start_polling(bot, session_pool=AsyncSessionLocal)
     finally:
-        logging.info("Main application loop stopped.")
+        parser_task.cancel()
+
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logging.info("Application interrupted by user.")
+    asyncio.run(main())
