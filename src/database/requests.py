@@ -1,6 +1,5 @@
 from sqlalchemy import select
 from database.models import User, Item, watchlists
-from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from parser.fetcher import SteamFetcher
@@ -12,7 +11,6 @@ async def get_or_create_user(session: AsyncSession, tg_id: int, username: str | 
         user = User(
             telegram_id = tg_id_str,
             username = username,
-            created_at = datetime.now(timezone.utc)
         )
         return True, user
     return False, user

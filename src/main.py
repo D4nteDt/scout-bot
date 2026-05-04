@@ -65,7 +65,7 @@ async def process_and_update_prices(session: AsyncSession, processor: OracleProc
         else:
             logging.error(f"Could not obtain item ID for item '{item_name}'. Skipping update.")
 
-async def run_parser_loop():
+async def run_parser_loop(session: AsyncSession):
     logging.info("Starting Steam Parser Loop")
     async with aiohttp.ClientSession() as http_session:
         while True:
@@ -75,23 +75,32 @@ async def run_parser_loop():
                 names = (await session.execute(stmt)).scalars().all()
                 fetched_data = await fetcher.fetch_all(http_session, names)
                 if fetched_data:
-                    async with AsyncSessionLocal() as session:
-                        processor = OracleProcessor(sql_session=session)
-                        await process_and_update_prices(session, processor, fetched_data)
+                    async with AsyncSessionLocal() as write_session:
+                        processor = OracleProcessor(sql_session=write_session)
+                        await process_and_update_prices(write_session, processor, fetched_data)
+                else:
+                    logging.info("No data fetched from Steam. Waiting...")
+                await asyncio.sleep(30)
+
             except Exception as e:
                 logging.error(f"Parser Error: {e}")
-            await asyncio.sleep(30)
+                await asyncio.sleep(30)
 
 async def main():
     await init_db(engine)
     dp.update.middleware(DbSessionMiddleware(AsyncSessionLocal))
     dp.include_router(router)
     logging.info("System is starting...")
-    parser_task = asyncio.create_task(run_parser_loop())
-    try:
-        await dp.start_polling(bot, session_pool=AsyncSessionLocal)
-    finally:
-        parser_task.cancel()
+    async with AsyncSessionLocal() as parser_read_session:
+        parser_task = asyncio.create_task(run_parser_loop(parser_read_session))
+        try:
+            await dp.start_polling(bot, session_pool=AsyncSessionLocal)
+        finally:
+            parser_task.cancel()
+            try:
+                await parser_task
+            except Exception as e:
+                logging.error(e)
 
 if __name__ == "__main__":
     asyncio.run(main())

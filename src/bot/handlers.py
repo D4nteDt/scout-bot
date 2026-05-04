@@ -6,7 +6,7 @@ from database.requests import get_or_create_user, get_or_create_item
 from database.models import Item, User
 from processor import OracleProcessor
 from sqlalchemy.ext.asyncio import AsyncSession
-from bot.keyboards import main_menu, skins_list_keyboard
+from bot.keyboards import main_menu, skins_list_keyboard, get_my_items_keyboard
 import logging
 
 router = Router()
@@ -15,21 +15,22 @@ router = Router()
 async def cmd_start(message: types.Message, session: AsyncSession):
     is_new_user_flag, user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
     try:
-        await session.commit()
         if is_new_user_flag:
+            session.add(user)
+            await session.commit()
             await message.answer(f"Добро пожаловать в Оракул, {user.username}")
         else:
             await message.answer(f"С возвращением!")
     except Exception as e:
         await session.rollback()
         await message.answer("Произошла ошибка. Попробуйте позже.")
-        logging.info("Ошибка при обработке /start")
+        logging.info(f"Ошибка при обработке /start: {e}")
 
 @router.message(Command("add"))
 async def add_skin(message: types.Message, session: AsyncSession):
     skin_name = message.text.replace("/add", "").strip()
     if not skin_name:
-        await message.answer("Введите название скина после команды.")
+        await message.answer("Введите название предмета после команды.")
         return
     item, is_created = await get_or_create_item(session, skin_name)
     if not item:
@@ -39,12 +40,27 @@ async def add_skin(message: types.Message, session: AsyncSession):
     result = await session.execute(user_stmt)
     user = result.scalar_one_or_none()
     if item in user.watchlist:
-        await message.answer("Этот скин уже есть в вашем списке отслеживания.")
+        await message.answer("Данный предмет уже есть в вашем списке отслеживания.")
     else:
         user.watchlist.append(item)
         await session.commit()
         msg = f"Предмет добавлен." if is_created else "Предмет привязан."
         await message.answer(f"{msg} Текущая цена: {item.current_price} ₽")
+
+@router.message(Command("my_items"))
+async def cmd_my_items(message: types.Message, session: AsyncSession):
+    tg_id = message.from_user.id
+    user = await session.scalar(select(User).where(User.telegram_id == tg_id))
+    if not user:
+        await message.answer("Пройдите пожалуйста регистрацию с помощью команды /start")
+        return
+    if not user.watchlist:
+        await message.answer("Вы пока не отслеживаете ни одного предмета. Используйте команду /add [Название скина] для добавления.")
+        return
+    keyboard_buttons = []
+    reply_markup = get_my_items_keyboard(user.watchlist)
+    await message.answer("Список отслеживаемых предметов:", reply_markup=reply_markup)
+    
 
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(callback: types.CallbackQuery):
