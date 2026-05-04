@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database.models import Base, Item
 from processor import OracleProcessor 
-from database.database import engine, AsyncSessionLocal 
+from database.database import engine, AsyncSessionLocal
+from database.midleware import DbSessionMiddleware
 from parser.fetcher import SteamFetcher
 logging.basicConfig(level=logging.INFO)
 
@@ -83,6 +84,7 @@ async def run_parser_loop():
 
 async def main():
     await init_db(engine)
+    dp.update.middleware(DbSessionMiddleware(AsyncSessionLocal))
     dp.include_router(router)
     logging.info("System is starting...")
     parser_task = asyncio.create_task(run_parser_loop())
