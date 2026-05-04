@@ -9,7 +9,6 @@ from database.models import Base, Item
 from processor import OracleProcessor 
 from database.database import engine, AsyncSessionLocal 
 from parser.fetcher import SteamFetcher
-from config.configs import items_to_track
 logging.basicConfig(level=logging.INFO)
 
 async def init_db(engine_obj):
@@ -71,7 +70,9 @@ async def run_parser_loop():
         while True:
             try:
                 fetcher = SteamFetcher()
-                fetched_data = await fetcher.fetch_all(http_session, items_to_track)
+                stmt = select(Item.name)
+                names = (await session.execute(stmt)).scalars().all()
+                fetched_data = await fetcher.fetch_all(http_session, names)
                 if fetched_data:
                     async with AsyncSessionLocal() as session:
                         processor = OracleProcessor(sql_session=session)

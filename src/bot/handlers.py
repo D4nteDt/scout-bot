@@ -1,10 +1,53 @@
 from aiogram import Router, F, types
-from bot.keyboards import main_menu, skins_list_keyboard
+from aiogram.filters import Command
+from sqlalchemy import select
+from database.requests import get_or_create_user, get_or_create_item
+from database.models import Item, User
 from processor import OracleProcessor
-from database.models import Item
-import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from bot.keyboards import main_menu, skins_list_keyboard
+import logging
 
 router = Router()
+
+@router.message(Command("start"))
+async def cmd_start(message: types.Message, session: AsyncSession):
+    is_new_user_flag, user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    try:
+        await session.commit()
+        if is_new_user_flag:
+            await message.answer(f"Добро пожаловать в Оракул, {user.username}")
+        else:
+            await message.answer(f"С возвращением!")
+    except Exception as e:
+        await session.rollback()
+        await message.answer("Произошла ошибка. Попробуйте позже.")
+        logging.info("Ошибка при обработке /start")
+
+@router.message(Command("add"))
+async def add_skin(message: types.Message, session: AsyncSession):
+    skin_name = message.text.replace("/add", "").strip()
+    if not skin_name:
+        await message.answer("Введите название скина после команды.")
+        return
+    item, is_created = await get_or_create_item(session, skin_name)
+    if not item:
+        await message.answer(f"К сожалению, предмет {skin_name} не найден в Steam. Проверьте правильонсть написания и повторите попытку.")
+        return
+    user_stmt = select(User).where(User.telegram_id == str(message.from_user.id)).options(select(User.watchlist))
+    result = await session.execute(user_stmt)
+    user = result.scalar_one_or_none()
+    if item in user.watchlist:
+        await message.answer("Этот скин уже есть в вашем списке отслеживания.")
+    else:
+        user.watchlist.append(item)
+        await session.commit()
+        msg = f"Предмет добавлен." if is_created else "Предмет привязан."
+        await message.answer(f"{msg} Текущая цена: {item.current_price} ₽")
+
+@router.callback_query(F.data == "back_to_main")
+async def back_to_main(callback: types.CallbackQuery):
+    await callback.message.edit_text("🧙‍♂️ Главное меню Оракула:", reply_markup=main_menu())
 
 @router.callback_query(F.data == "list_skins")
 async def list_skins(callback: types.CallbackQuery, session_pool):
@@ -12,10 +55,11 @@ async def list_skins(callback: types.CallbackQuery, session_pool):
         result = await session.execute(select(Item))
         items = result.scalars().all()
         
-        await callback.message.answer(
-            "Выберите скин для анализа:", 
-            reply_markup=skins_list_keyboard(items)
-        )
+        if not items:
+            await callback.answer("В базе пока пусто. Подожди, пока парсер соберет данные.")
+            return
+
+        await callback.message.edit_text("Выберите скин для анализа:", reply_markup=skins_list_keyboard(items))
 
 @router.callback_query(F.data.startswith("view_"))
 async def view_item_details(callback: types.CallbackQuery, session_pool):
@@ -23,19 +67,19 @@ async def view_item_details(callback: types.CallbackQuery, session_pool):
     
     async with session_pool() as session:
         processor = OracleProcessor(sql_session=session)
-        prediction = await processor.get_kalman_prediction(item_id)
         item = await session.get(Item, item_id)
         
+        prediction = await processor.get_kalman_prediction(item_id, steps=5)
+        
+        text = (f"Аналитика: {item.name}**\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"Реальная цена: `{item.current_price:.2f}`\n"
+                f"Цена Оракула: `{item.oracle_price:.2f}`\n"
+                f"Тренд: `{'Вверх' if item.trend > 0 else 'Вниз'} ({item.trend:.4f})`\n")
+        
         if prediction:
-            price, trend = prediction
-            text = (f"Анализ: {item.name}**\n\n"
-                    f"Текущая цена: {item.current_price:.2f}\n"
-                    f"Оракул (Калман): {item.oracle_price:.2f}\n"
-                    f"Прогноз тренда: {'Вверх' if trend > 0 else 'Вниз'} ({trend:.4f})")
-            
-            # Сюда же в будущем прикрутим отправку графика (через pyplot)
-            await callback.message.answer(text, parse_mode="Markdown")
-
-@router.callback_query(F.data == "back_to_main")
-async def back_to_main(callback: types.CallbackQuery):
-    await callback.message.edit_text("Главное меню Оракула:", reply_markup=main_menu())
+            p_price, p_trend = prediction
+            text += f"\n🔮 **Прогноз на 5 шагов:**\nОжидаемая цена: `{p_price:.2f}`"
+        
+        await callback.message.answer(text, parse_mode="Markdown")
+        await callback.answer()

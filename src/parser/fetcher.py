@@ -35,6 +35,7 @@ class SteamFetcher:
                 volume = self._clean_volume(data.get("volume"))
                 if data and data.get("success") and volume > 0:
                     return {
+                        "market_hash_name": encoded_name,
                         "name": item_name,
                         "price": self._clean_price(data.get("lowest_price")),
                         "median": self._clean_price(data.get("median_price")),

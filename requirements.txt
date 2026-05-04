@@ -35,9 +35,9 @@ magic-filter==1.0.12
 more-itertools==11.0.1
 msgpack==1.1.2
 multidict==6.7.1
-numpy==2.4.3
+numpy==2.2.6
 packaging==26.0
-pandas==3.0.1
+pandas==2.3.3
 pbs-installer==2026.3.25
 pkginfo==1.12.1.2
 platformdirs==4.9.4
