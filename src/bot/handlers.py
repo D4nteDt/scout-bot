@@ -1,5 +1,6 @@
 from aiogram import Router, F, types
 from aiogram.filters import Command
+from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 from database.requests import get_or_create_user, get_or_create_item
 from database.models import Item, User
@@ -32,9 +33,9 @@ async def add_skin(message: types.Message, session: AsyncSession):
         return
     item, is_created = await get_or_create_item(session, skin_name)
     if not item:
-        await message.answer(f"К сожалению, предмет {skin_name} не найден в Steam. Проверьте правильонсть написания и повторите попытку.")
+        await message.answer(f"К сожалению, предмет {skin_name} не найден в Steam. Проверьте правильность написания и повторите попытку.")
         return
-    user_stmt = select(User).where(User.telegram_id == str(message.from_user.id)).options(select(User.watchlist))
+    user_stmt = select(User).where(User.telegram_id == str(message.from_user.id)).options(selectinload(User.watchlist))
     result = await session.execute(user_stmt)
     user = result.scalar_one_or_none()
     if item in user.watchlist:
