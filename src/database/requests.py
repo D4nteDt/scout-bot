@@ -18,11 +18,12 @@ async def get_or_create_user(session: AsyncSession, tg_id: int, username: str | 
     return False, user
 
 async def get_or_create_item(session: AsyncSession, item_name: str):
-    stmt = select(watchlists).where(Item.name == item_name)
-    item = await session.execute(stmt).scalar_one_or_none()
+    stmt = select(Item).where(Item.name == item_name)
+    item = (await session.execute(stmt)).scalar_one_or_none()
     if item:
         return item, False
-    steam_data = await SteamFetcher.fetch_item(item_name=item_name)
+    pars = SteamFetcher()
+    steam_data = await pars.fetch_item(item_name)
     if steam_data:
         item = Item(
             market_hash_name = steam_data['market_hash_name'],

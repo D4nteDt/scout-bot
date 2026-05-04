@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp
 from urllib.parse import quote
+import logging
 
 class SteamFetcher:
     def __init__(self, appid: int = 730, currency: int = 5, max_concurrent = 5):
@@ -21,27 +22,29 @@ class SteamFetcher:
         if not volume_str: return 0
         return int(volume_str.replace(",", "").replace(".", ""))
 
-    async def fetch_item(self, session: aiohttp.ClientSession, item_name: str) -> dict:
-        async with self.semaphore:
-            encoded_name = quote(item_name)
-            url = f"{self.base_url}?appid={self.appid}&currency={self.currency}&market_hash_name={encoded_name}"
-        
-            async with session.get(url) as response:
-                if response.status != 200:
-                    print(f"Ошибка сети: {response.status}")
-                    return None
+    async def fetch_item(self, item_name: str) -> dict:
+        async with aiohttp.ClientSession() as session:
+
+            async with self.semaphore:
+                encoded_name = quote(item_name)
+                url = f"{self.base_url}?appid={self.appid}&currency={self.currency}&market_hash_name={encoded_name}"
+
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        logging.info(f"Ошибка сети: {response.status}")
+                        return None
             
-                data = await response.json()
-                volume = self._clean_volume(data.get("volume"))
-                if data and data.get("success") and volume > 0:
-                    return {
-                        "market_hash_name": encoded_name,
-                        "name": item_name,
-                        "price": self._clean_price(data.get("lowest_price")),
-                        "median": self._clean_price(data.get("median_price")),
-                        "volume": volume
-                    }
-                return None
+                    data = await response.json()
+                    volume = self._clean_volume(data.get("volume"))
+                    if data and data.get("success") and volume > 0:
+                        return {
+                            "market_hash_name": encoded_name,
+                            "name": item_name,
+                            "price": self._clean_price(data.get("lowest_price")),
+                            "median": self._clean_price(data.get("median_price")),
+                            "volume": volume
+                        }
+                    return None
     async def fetch_all(self, session, item_list):
         tasks = [self.fetch_item(session, item) for item in item_list]
         results = await asyncio.gather(*tasks)
