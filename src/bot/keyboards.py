@@ -1,4 +1,5 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import BotCommand
 from database.models import Item
 from typing import List
 from bot.callbacks import ItemCallback
@@ -17,3 +18,9 @@ def get_my_items_keyboard(items: List["Item"]) -> InlineKeyboardMarkup:
         keyboard_rows.append(buttons[i:i+2])
     keyboard_rows.append([InlineKeyboardButton(text="Закрыть", callback_data="close_item_info")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+private = [
+    BotCommand(command="start", description="Запустить бота"),
+    BotCommand(command="add", description="Добавить скин в список отслеживаемых"),
+    BotCommand(command="my_items", description="Список отслеживаемых предметов")
+]

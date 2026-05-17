@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from bot.bot import dp, bot
+from bot.keyboards import private
 from bot.handlers import router
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -99,6 +100,7 @@ async def main():
     await init_db(engine)
     dp.update.middleware(DbSessionMiddleware(AsyncSessionLocal))
     dp.include_router(router)
+    await bot.set_my_commands(private)
     logging.info("System is starting...")
     
     async with AsyncSessionLocal() as parser_read_session:
