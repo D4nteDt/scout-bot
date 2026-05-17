@@ -27,7 +27,7 @@ class Item(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     current_price: Mapped[float] = mapped_column(Float)
     market_hash_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    name: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(String(255), unique=True)
     oracle_price: Mapped[float | None] = mapped_column(Float)
     trend: Mapped[float | None] = mapped_column(Float)
     history: Mapped[list["ItemHistory"]] = relationship(back_populates="item", cascade="all, delete-orphan")

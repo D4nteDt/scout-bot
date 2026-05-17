@@ -1,8 +1,8 @@
 from sqlalchemy import select
-from database.models import User, Item, watchlists
+from database.models import User, Item
 from sqlalchemy.ext.asyncio import AsyncSession
-import logging
 from parser.fetcher import SteamFetcher
+import logging
 async def get_or_create_user(session: AsyncSession, tg_id: int, username: str | None):
     tg_id_str = str(tg_id)
     result = await session.execute(select(User).where(User.telegram_id == tg_id_str))
@@ -17,18 +17,33 @@ async def get_or_create_user(session: AsyncSession, tg_id: int, username: str | 
 
 async def get_or_create_item(session: AsyncSession, item_name: str):
     stmt = select(Item).where(Item.name == item_name)
-    item = (await session.execute(stmt)).scalar_one_or_none()
+    result = await session.execute(stmt)
+    item = result.scalar_one_or_none()
+
     if item:
         return item, False
+
     pars = SteamFetcher()
-    steam_data = await pars.fetch_item(item_name)
+    steam_data = None
+    try:
+        steam_data = await pars.fetch_item(item_name)
+        if not steam_data or not steam_data.get('market_hash_name') or steam_data.get('price') == 0.0:
+            logging.info(f"Steam fetch for '{item_name}' returned incomplete data or 0.0 price: {steam_data}. Treating as not found.")
+            steam_data = None
+    except Exception as e:
+        logging.error(f"Error fetching item '{item_name}' from Steam: {e}", exc_info=True)
+        steam_data = None
+
     if steam_data:
         item = Item(
-            market_hash_name = steam_data['market_hash_name'],
-            name = item_name,
-            current_price = steam_data['price']
+            market_hash_name=steam_data['market_hash_name'],
+            name=item_name,
+            current_price=steam_data['price'],
+            oracle_price=0.0,
+            trend=0.0
         )
         session.add(item)
         await session.flush()
         return item, True
-    return None, False
+    else:
+        return None, False

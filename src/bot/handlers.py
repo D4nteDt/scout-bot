@@ -3,10 +3,11 @@ from aiogram.filters import Command
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 from database.requests import get_or_create_user, get_or_create_item
-from database.models import Item, User
-from processor import OracleProcessor
+from database.models import User, Item, ItemHistory
 from sqlalchemy.ext.asyncio import AsyncSession
-from bot.keyboards import main_menu, skins_list_keyboard, get_my_items_keyboard
+from bot.keyboards import get_my_items_keyboard
+from processor import OracleProcessor
+from bot.callbacks import ItemCallback
 import logging
 
 router = Router()
@@ -49,54 +50,68 @@ async def add_skin(message: types.Message, session: AsyncSession):
 
 @router.message(Command("my_items"))
 async def cmd_my_items(message: types.Message, session: AsyncSession):
-    tg_id = message.from_user.id
-    user = await session.scalar(select(User).where(User.telegram_id == tg_id))
+    user_id_str = str(message.from_user.id)
+    user_stmt = select(User).where(User.telegram_id == user_id_str).options(
+        selectinload(User.watchlist)
+    )
+    result = await session.execute(user_stmt)
+    user = result.scalar_one_or_none()
+
     if not user:
-        await message.answer("Пройдите пожалуйста регистрацию с помощью команды /start")
+        await message.answer("Пожалуйста, зарегистрируйтесь через /start")
         return
-    if not user.watchlist:
-        await message.answer("Вы пока не отслеживаете ни одного предмета. Используйте команду /add [Название скина] для добавления.")
+    items = user.watchlist 
+    if not items:
+        await message.answer("Вы пока не отслеживаете ни одного предмета. Используйте /add 'NameItem'.")
         return
-    keyboard_buttons = []
-    reply_markup = get_my_items_keyboard(user.watchlist)
+    reply_markup = get_my_items_keyboard(items)
     await message.answer("Список отслеживаемых предметов:", reply_markup=reply_markup)
-    
 
-@router.callback_query(F.data == "back_to_main")
-async def back_to_main(callback: types.CallbackQuery):
-    await callback.message.edit_text("🧙‍♂️ Главное меню Оракула:", reply_markup=main_menu())
+@router.callback_query(ItemCallback.filter())
+async def show_item_info(
+    callback: types.CallbackQuery,
+    callback_data: ItemCallback,
+    session: AsyncSession
+):
+    item_id = callback_data.item_id
 
-@router.callback_query(F.data == "list_skins")
-async def list_skins(callback: types.CallbackQuery, session_pool):
-    async with session_pool() as session:
-        result = await session.execute(select(Item))
-        items = result.scalars().all()
-        
-        if not items:
-            await callback.answer("В базе пока пусто. Подожди, пока парсер соберет данные.")
-            return
+    item_stmt = select(Item).where(Item.id == item_id).options(
+        selectinload(Item.history.and_(ItemHistory.is_outlier == False))
+    )
+    result = await session.execute(item_stmt)
+    item = result.scalar_one_or_none()
 
-        await callback.message.edit_text("Выберите скин для анализа:", reply_markup=skins_list_keyboard(items))
+    if not item:
+        await callback.answer("Предмет не найден.", show_alert=True)
+        return
 
-@router.callback_query(F.data.startswith("view_"))
-async def view_item_details(callback: types.CallbackQuery, session_pool):
-    item_id = int(callback.data.split("_")[1])
-    
-    async with session_pool() as session:
-        processor = OracleProcessor(sql_session=session)
-        item = await session.get(Item, item_id)
+    clean_history = [h for h in item.history if not h.is_outlier]
+    history_count = len(clean_history)
+
+    message_text = f"**Информация по предмету: {item.name}**\n"
+    message_text += f"Текущая цена: {item.current_price:.2f} ₽\n" if item.current_price is not None else "Текущая цена сейчас недоступна"
+    message_text += f"Oracle цена: {item.oracle_price:.2f} ₽\n" if item.oracle_price is not None else "Oracle цена сейчас недоступна"
+    message_text += f"Тренд: {item.trend:.2f}\n" if item.trend is not None else "Trend сейчас недоступен"
+    message_text += f"История записей (чистых): {history_count}\n"
+
+    if history_count < 101:
+        message_text += "\n_Недостаточно данных для прогноза (требуется 101+ чистых точек)._\n"
+        message_text += "Все данные парсера актуальны."
+    else:
+        message_text += "\n**Прогнозы:**\n"
+        oracle_processor = OracleProcessor(session)
+        prediction_tomorrow = await oracle_processor.get_kalman_prediction(item.id, steps=5)
+        if prediction_tomorrow:
+            predicted_price_tomorrow, predicted_trend_tomorrow = prediction_tomorrow
+            message_text += f"Прогноз на завтра: {predicted_price_tomorrow:.2f} ₽ (Тренд: {predicted_trend_tomorrow:.2f})\n"
+        else:
+            message_text += "Прогноз на завтра: _Недоступен_\n"
         
-        prediction = await processor.get_kalman_prediction(item_id, steps=5)
-        
-        text = (f"Аналитика: {item.name}**\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"Реальная цена: `{item.current_price:.2f}`\n"
-                f"Цена Оракула: `{item.oracle_price:.2f}`\n"
-                f"Тренд: `{'Вверх' if item.trend > 0 else 'Вниз'} ({item.trend:.4f})`\n")
-        
-        if prediction:
-            p_price, p_trend = prediction
-            text += f"\n🔮 **Прогноз на 5 шагов:**\nОжидаемая цена: `{p_price:.2f}`"
-        
-        await callback.message.answer(text, parse_mode="Markdown")
-        await callback.answer()
+
+    await callback.message.edit_text(message_text, reply_markup=callback.message.reply_markup, parse_mode="Markdown")
+    await callback.answer()
+
+@router.callback_query(F.data == "close_item_info")
+async def close_item_info_handler(callback: types.CallbackQuery):
+    await callback.message.delete()
+    await callback.answer()
