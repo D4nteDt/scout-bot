@@ -2,6 +2,7 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
+from analytics.filters_and_predict import plot_results
 from parser.fetcher import parse_steam_market_link
 from database.requests import get_or_create_user, get_or_create_item
 from database.models import User, Item, ItemHistory
@@ -132,7 +133,7 @@ async def show_item_info(
     message_text += f"Текущая цена: {item.current_price:.2f} ₽\n" if item.current_price is not None else "Текущая цена сейчас недоступна"
     message_text += f"Oracle цена: {item.oracle_price:.2f} ₽\n" if item.oracle_price is not None else "Oracle цена сейчас недоступна"
     message_text += f"Тренд: {item.trend:.2f}\n" if item.trend is not None else "Trend сейчас недоступен"
-    message_text += f"История записей (чистых): {history_count}\n"
+    message_text += f"История записей: {history_count}\n"
 
     if history_count < 101:
         message_text += "\n_Недостаточно данных для прогноза (требуется 101+ чистых точек)._\n"
@@ -154,4 +155,50 @@ async def show_item_info(
 @router.callback_query(F.data == "close_item_info")
 async def close_item_info_handler(callback: types.CallbackQuery):
     await callback.message.delete()
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("graph_"))
+async def show_forecast_graph(callback: types.CallbackQuery, session: AsyncSession):
+    item_id = int(callback.data.split("_")[1])
+    stmt = (
+        select(Item)
+        .where(Item.id == item_id)
+        .options(selectinload(Item.history))
+    )
+
+    result = await session.execute(stmt)
+    item = result.scalar_one_or_none()
+    if not item:
+        await callback.answer(
+            "Предмет не найден",
+            show_alert=True
+        )
+        return
+    if len(item.history) < 3:
+        await callback.answer(
+            "Недостаточно данных",
+            show_alert=True
+        )
+        return
+    original_prices = [
+        h.price
+        for h in item.history
+    ]
+    filtered_prices = [
+        h.kalman_price
+        for h in item.history
+        if h.kalman_price is not None
+    ]
+    graph_buffer = plot_results(
+        original_prices,
+        filtered_prices
+    )
+    photo = types.BufferedInputFile(
+        graph_buffer.getvalue(),
+        filename="forecast.png"
+    )
+    await callback.message.answer_photo(
+        photo=photo,
+        caption=f"📈 Прогноз цены: {item.name}"
+    )
     await callback.answer()
