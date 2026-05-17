@@ -4,11 +4,11 @@ from urllib.parse import quote
 import logging
 
 class SteamFetcher:
-    def __init__(self, appid: int = 730, currency: int = 5, max_concurrent = 5): # <-- ИСПРАВЛЕНО: __init__ вместо init
+    def __init__(self, appid: int = 730, currency: int = 5, max_concurrent = 5):
         self.appid = appid
         self.currency = currency
         self.semaphore = asyncio.Semaphore(max_concurrent)
-        self.base_url = "https://steamcommunity.com/market/priceoverview/" # <-- ИСПРАВЛЕНО: убрал &quot;
+        self.base_url = "https://steamcommunity.com/market/priceoverview/"
 
     def _clean_price(self, price_str: str) -> float:
         if not price_str: return 0.0
@@ -22,7 +22,7 @@ class SteamFetcher:
         if not volume_str: return 0
         return int(volume_str.replace(",", "").replace(".", ""))
 
-    async def fetch_item(self, item_market_hash_name: str) -> dict: # <-- Изменил имя аргумента для ясности
+    async def fetch_item(self, item_market_hash_name: str) -> dict:
         async with aiohttp.ClientSession() as session:
 
             async with self.semaphore:
@@ -45,13 +45,15 @@ class SteamFetcher:
                         logging.info(f"Steam API returned 0 or negative volume for {item_market_hash_name}. Volume: {volume}")
                         return None
 
-                    display_name = data.get("item_name", item_market_hash_name) 
+                    display_name = data.get("item_name", item_market_hash_name)
+                    lowest = self._clean_price(data.get("lowest_price"))
+                    median = self._clean_price(data.get("median_price"))
 
                     return {
                         "market_hash_name": item_market_hash_name,
                         "name": display_name,
-                        "price": self._clean_price(data.get("lowest_price")),
-                        "median": self._clean_price(data.get("median_price")),
+                        "price": lowest if lowest > 0 else median,
+                        "median": median,
                         "volume": volume
                     }
     

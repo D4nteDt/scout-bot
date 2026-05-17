@@ -9,7 +9,6 @@ from processor import OracleProcessor
 from database.database import engine, AsyncSessionLocal
 from database.midleware import DbSessionMiddleware
 from parser.fetcher import SteamFetcher
-from database.requests import get_or_create_item
 
 logging.basicConfig(level=logging.INFO)
 
