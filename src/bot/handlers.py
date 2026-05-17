@@ -2,6 +2,7 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
+from parser.fetcher import parse_steam_market_link
 from database.requests import get_or_create_user, get_or_create_item
 from database.models import User, Item, ItemHistory
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,24 +30,63 @@ async def cmd_start(message: types.Message, session: AsyncSession):
 
 @router.message(Command("add"))
 async def add_skin(message: types.Message, session: AsyncSession):
-    skin_name = message.text.replace("/add", "").strip()
-    if not skin_name:
-        await message.answer("Введите название предмета после команды.")
+
+    link = message.text.replace("/add", "").strip()
+
+    if not link:
+        await message.answer(
+            "Отправьте ссылку Steam Market."
+        )
         return
-    item, is_created = await get_or_create_item(session, skin_name)
+
+    parsed = parse_steam_market_link(link)
+
+    if not parsed:
+        await message.answer(
+            "Неверная ссылка Steam Market."
+        )
+        return
+
+    appid = parsed["appid"]
+    market_hash_name = parsed["market_hash_name"]
+
+    item = await get_or_create_item(
+        session,
+        appid,
+        market_hash_name
+    )
+
     if not item:
-        await message.answer(f"К сожалению, предмет {skin_name} не найден в Steam. Проверьте правильность написания и повторите попытку.")
+        await message.answer(
+            "Не удалось получить предмет."
+        )
         return
-    user_stmt = select(User).where(User.telegram_id == str(message.from_user.id)).options(selectinload(User.watchlist))
+
+    user_stmt = (
+        select(User)
+        .where(User.telegram_id == str(message.from_user.id))
+        .options(selectinload(User.watchlist))
+    )
+
     result = await session.execute(user_stmt)
+
     user = result.scalar_one_or_none()
+
     if item in user.watchlist:
-        await message.answer("Данный предмет уже есть в вашем списке отслеживания.")
-    else:
-        user.watchlist.append(item)
-        await session.commit()
-        msg = f"Предмет добавлен." if is_created else "Предмет привязан."
-        await message.answer(f"{msg} Текущая цена: {item.current_price} ₽")
+        await message.answer(
+            "Предмет уже отслеживается."
+        )
+        return
+
+    user.watchlist.append(item)
+
+    await session.commit()
+
+    await message.answer(
+        f"Добавлен предмет:\n"
+        f"{item.name}\n"
+        f"Цена: {item.current_price} ₽"
+    )
 
 @router.message(Command("my_items"))
 async def cmd_my_items(message: types.Message, session: AsyncSession):
@@ -62,7 +102,7 @@ async def cmd_my_items(message: types.Message, session: AsyncSession):
         return
     items = user.watchlist 
     if not items:
-        await message.answer("Вы пока не отслеживаете ни одного предмета. Используйте /add 'NameItem'.")
+        await message.answer("Вы пока не отслеживаете ни одного предмета. Используйте /add [Ссылка на предмет].")
         return
     reply_markup = get_my_items_keyboard(items)
     await message.answer("Список отслеживаемых предметов:", reply_markup=reply_markup)

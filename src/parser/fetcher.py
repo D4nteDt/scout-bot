@@ -2,10 +2,30 @@ import asyncio
 import aiohttp
 from urllib.parse import quote
 import logging
+from urllib.parse import urlparse, unquote
+
+def parse_steam_market_link(link: str):
+        parsed = urlparse(link)
+        parts = parsed.path.split("/")
+        try:
+            listings_index = parts.index("listings")
+        except ValueError:
+            return None
+        try:
+            appid = int(parts[listings_index + 1])
+        except Exception:
+            return None
+        try:
+            market_hash_name = unquote(parts[listings_index + 2])
+        except Exception:
+            return None
+        return {
+        "appid": appid,
+        "market_hash_name": market_hash_name
+    }
 
 class SteamFetcher:
-    def __init__(self, appid: int = 730, currency: int = 5, max_concurrent = 5):
-        self.appid = appid
+    def __init__(self, currency: int = 5, max_concurrent = 5):
         self.currency = currency
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.base_url = "https://steamcommunity.com/market/priceoverview/"
@@ -22,12 +42,12 @@ class SteamFetcher:
         if not volume_str: return 0
         return int(volume_str.replace(",", "").replace(".", ""))
 
-    async def fetch_item(self, item_market_hash_name: str) -> dict:
+    async def fetch_item(self, appid: int, item_market_hash_name: str) -> dict:
         async with aiohttp.ClientSession() as session:
 
             async with self.semaphore:
                 encoded_market_hash_name = quote(item_market_hash_name)
-                url = f"{self.base_url}?appid={self.appid}&currency={self.currency}&market_hash_name={encoded_market_hash_name}"
+                url = f"{self.base_url}?appid={appid}&currency={self.currency}&market_hash_name={encoded_market_hash_name}"
 
                 async with session.get(url) as response:
                     if response.status != 200:
@@ -57,7 +77,14 @@ class SteamFetcher:
                         "volume": volume
                     }
     
-    async def fetch_all(self, item_market_hash_names: list):
-        tasks = [self.fetch_item(market_hash_name) for market_hash_name in item_market_hash_names]
-        results = await asyncio.gather(*tasks)
-        return results
+    async def fetch_all(self, items):
+
+        tasks = [
+            self.fetch_item(
+            item["appid"],
+            item["market_hash_name"]
+            )
+            for item in items
+    ]
+
+        return await asyncio.gather(*tasks)

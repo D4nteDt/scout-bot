@@ -25,6 +25,7 @@ class User(Base):
 class Item(Base):
     __tablename__ = "items"
     id: Mapped[int] = mapped_column(primary_key=True)
+    appid: Mapped[int] = mapped_column(index=True)
     current_price: Mapped[float] = mapped_column(Float)
     market_hash_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255), unique=True)

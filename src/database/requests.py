@@ -15,35 +15,36 @@ async def get_or_create_user(session: AsyncSession, tg_id: int, username: str | 
         return True, user
     return False, user
 
-async def get_or_create_item(session: AsyncSession, item_name: str):
-    stmt = select(Item).where(Item.name == item_name)
+async def get_or_create_item(session: AsyncSession, appid, market_hash_name: str) -> Item | None:
+    stmt = select(Item).where(Item.name == market_hash_name, Item.appid == appid)
     result = await session.execute(stmt)
     item = result.scalar_one_or_none()
 
     if item:
-        return item, False
+        return item
 
     pars = SteamFetcher()
     steam_data = None
     try:
-        steam_data = await pars.fetch_item(item_name)
+        steam_data = await pars.fetch_item(appid, market_hash_name)
         if not steam_data or not steam_data.get('market_hash_name') or steam_data.get('price') == 0.0:
-            logging.info(f"Steam fetch for '{item_name}' returned incomplete data or 0.0 price: {steam_data}. Treating as not found.")
+            logging.info(f"Steam fetch for '{market_hash_name}' returned incomplete data or 0.0 price: {steam_data}. Treating as not found.")
             steam_data = None
     except Exception as e:
-        logging.error(f"Error fetching item '{item_name}' from Steam: {e}", exc_info=True)
+        logging.error(f"Error fetching item '{market_hash_name}' from Steam: {e}", exc_info=True)
         steam_data = None
 
     if steam_data:
         item = Item(
-            market_hash_name=steam_data['market_hash_name'],
-            name=item_name,
+            appid=appid,
+            market_hash_name=market_hash_name,
+            name=market_hash_name,
             current_price=steam_data['price'],
             oracle_price=0.0,
             trend=0.0
         )
         session.add(item)
         await session.flush()
-        return item, True
+        return item
     else:
-        return None, False
+        return None

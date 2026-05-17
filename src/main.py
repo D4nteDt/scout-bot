@@ -69,16 +69,23 @@ async def run_parser_loop(session: AsyncSession):
     while True:
         try:
             fetcher = SteamFetcher()
-            stmt = select(Item.market_hash_name)
-            market_hash_names = (await session.execute(stmt)).scalars().all()
+            stmt = select(Item.appid, Item.market_hash_name)
+            result = await session.execute(stmt)
+            market_items = [
+                {
+                    "appid": appid,
+                    "market_hash_name": market_hash_name
+                }
+                for appid, market_hash_name in result.all()
+            ]
             
-            if not market_hash_names:
+            if not market_items:
                 logging.info("No items in DB to fetch. Waiting...")
                 await asyncio.sleep(30)
                 continue
 
-            logging.info(f"Fetching data for market_hash_names: {market_hash_names}")
-            fetched_data_raw = await fetcher.fetch_all(market_hash_names)
+            logging.info(f"Fetching data for market_hash_names: {market_items}")
+            fetched_data_raw = await fetcher.fetch_all(market_items)
             fetched_data = [d for d in fetched_data_raw if d is not None]
             if fetched_data:
                 async with AsyncSessionLocal() as write_session:
