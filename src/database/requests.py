@@ -3,20 +3,24 @@ from database.models import User, Item
 from sqlalchemy.ext.asyncio import AsyncSession
 from parser.fetcher import SteamFetcher
 import logging
+
+
 async def get_or_create_user(session: AsyncSession, tg_id: int, username: str | None):
     tg_id_str = str(tg_id)
     result = await session.execute(select(User).where(User.telegram_id == tg_id_str))
     user = result.scalar_one_or_none()
     if not user:
         user = User(
-            telegram_id = tg_id_str,
-            username = username,
+            telegram_id=tg_id_str,
+            username=username,
         )
         return True, user
     return False, user
 
+
 async def get_or_create_item(session: AsyncSession, appid, market_hash_name: str) -> Item | None:
-    stmt = select(Item).where(Item.name == market_hash_name, Item.appid == appid)
+    stmt = select(Item).where(
+        Item.name == market_hash_name, Item.appid == appid)
     result = await session.execute(stmt)
     item = result.scalar_one_or_none()
 
@@ -28,10 +32,12 @@ async def get_or_create_item(session: AsyncSession, appid, market_hash_name: str
     try:
         steam_data = await pars.fetch_item(appid, market_hash_name)
         if not steam_data or not steam_data.get('market_hash_name') or steam_data.get('price') == 0.0:
-            logging.info(f"Steam fetch for '{market_hash_name}' returned incomplete data or 0.0 price: {steam_data}. Treating as not found.")
+            logging.info(
+                f"Steam fetch for '{market_hash_name}' returned incomplete data or 0.0 price: {steam_data}. Treating as not found.")
             steam_data = None
     except Exception as e:
-        logging.error(f"Error fetching item '{market_hash_name}' from Steam: {e}", exc_info=True)
+        logging.error(
+            f"Error fetching item '{market_hash_name}' from Steam: {e}", exc_info=True)
         steam_data = None
 
     if steam_data:

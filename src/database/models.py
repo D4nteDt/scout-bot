@@ -2,18 +2,23 @@ from datetime import datetime
 from sqlalchemy import ForeignKey, String, Float, DateTime, Table, Column, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+
 class Base(DeclarativeBase):
     pass
+
 
 class Watchlist(Base):
     __tablename__ = "watchlists"
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"),primary_key=True)
-    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"),primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey(
+        "users.id", ondelete="CASCADE"), primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey(
+        "items.id", ondelete="CASCADE"), primary_key=True)
     notification_type: Mapped[str] = mapped_column(String(20), default="none")
     last_notification_at = Column(DateTime, nullable=True)
     user: Mapped["User"] = relationship(back_populates="watchlist")
     item: Mapped["Item"] = relationship(back_populates="watchers")
+
     def __repr__(self):
         return (
             f"<Watchlist(user_id={self.user_id}, "
@@ -21,40 +26,53 @@ class Watchlist(Base):
             f"notification_type={self.notification_type})>"
         )
 
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
     telegram_id: Mapped[str] = mapped_column(String(100), unique=True)
     username: Mapped[str | None] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    watchlist: Mapped[list["Watchlist"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow)
+    watchlist: Mapped[list["Watchlist"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan")
+
     def __repr__(self):
         return f"<User(id={self.id}, tg_id={self.telegram_id})>"
+
 
 class Item(Base):
     __tablename__ = "items"
     id: Mapped[int] = mapped_column(primary_key=True)
     appid: Mapped[int] = mapped_column(index=True)
     current_price: Mapped[float] = mapped_column(Float)
-    market_hash_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    market_hash_name: Mapped[str] = mapped_column(
+        String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255), unique=True)
     oracle_price: Mapped[float | None] = mapped_column(Float)
     trend: Mapped[float | None] = mapped_column(Float)
-    history: Mapped[list["ItemHistory"]] = relationship(back_populates="item", cascade="all, delete-orphan")
+    history: Mapped[list["ItemHistory"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan")
     kalman_state_x: Mapped[str | None] = mapped_column(Text)
     kalman_state_p: Mapped[str | None] = mapped_column(Text)
-    last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    watchers:  Mapped[list["Watchlist"]] = relationship(back_populates="item", cascade="all, delete-orphan")
+    last_updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow)
+    watchers:  Mapped[list["Watchlist"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan")
+
     def __repr__(self):
         return f"<Item(id={self.id}, name='{self.name}')>"
+
 
 class ItemHistory(Base):
     __tablename__ = "item_history"
     id: Mapped[int] = mapped_column(primary_key=True)
-    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey(
+        "items.id", ondelete="CASCADE"), index=True)
     price: Mapped[float] = mapped_column(Float)
     volume: Mapped[int] = mapped_column(default=0)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow)
     kalman_price: Mapped[float | None] = mapped_column(Float)
     is_outlier: Mapped[bool] = mapped_column(default=False)
     item: Mapped["Item"] = relationship(back_populates="history")

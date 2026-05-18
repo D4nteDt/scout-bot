@@ -14,6 +14,7 @@ import logging
 
 router = Router()
 
+
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, session: AsyncSession):
     is_new_user_flag, user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
@@ -28,6 +29,7 @@ async def cmd_start(message: types.Message, session: AsyncSession):
         await session.rollback()
         await message.answer("Произошла ошибка. Попробуйте позже.")
         logging.info(f"Ошибка при обработке /start: {e}")
+
 
 @router.message(Command("add"))
 async def add_skin(message: types.Message, session: AsyncSession):
@@ -67,8 +69,8 @@ async def add_skin(message: types.Message, session: AsyncSession):
         select(User)
         .where(User.telegram_id == str(message.from_user.id))
         .options(selectinload(User.watchlist)
-        .selectinload(Watchlist.item)
-        )
+                 .selectinload(Watchlist.item)
+                 )
     )
 
     result = await session.execute(user_stmt)
@@ -88,6 +90,7 @@ async def add_skin(message: types.Message, session: AsyncSession):
         f"Цена: {item.current_price} ₽"
     )
 
+
 @router.message(Command("my_items"))
 async def cmd_my_items(message: types.Message, session: AsyncSession):
     user_id_str = str(message.from_user.id)
@@ -101,12 +104,13 @@ async def cmd_my_items(message: types.Message, session: AsyncSession):
     if not user:
         await message.answer("Пожалуйста, зарегистрируйтесь через /start")
         return
-    items = [watch.item for watch in user.watchlist] 
+    items = [watch.item for watch in user.watchlist]
     if not items:
         await message.answer("Вы пока не отслеживаете ни одного предмета. Используйте /add [Ссылка на предмет].")
         return
     reply_markup = get_my_items_keyboard(items)
     await message.answer("Список отслеживаемых предметов:", reply_markup=reply_markup)
+
 
 @router.callback_query(ItemCallback.filter())
 async def show_item_info(
@@ -116,7 +120,8 @@ async def show_item_info(
 ):
     item_id = callback_data.item_id
 
-    item_stmt = select(Item).where(Item.id == item_id).options(selectinload(Item.history))
+    item_stmt = select(Item).where(
+        Item.id == item_id).options(selectinload(Item.history))
     result = await session.execute(item_stmt)
     item = result.scalar_one_or_none()
 
@@ -145,15 +150,16 @@ async def show_item_info(
             message_text += f"Прогноз на завтра: {predicted_price_tomorrow:.2f} ₽ (Тренд: {predicted_trend_tomorrow:.2f})\n"
         else:
             message_text += "Прогноз на завтра: _Недоступен_\n"
-        
 
     await callback.message.answer(message_text, reply_markup=get_item_card_keyboard(item.id), parse_mode="Markdown")
     await callback.answer()
+
 
 @router.callback_query(F.data == "close_item_info")
 async def close_item_info_handler(callback: types.CallbackQuery):
     await callback.message.delete()
     await callback.answer()
+
 
 @router.callback_query(F.data.startswith("graph_"))
 async def show_forecast_graph(callback: types.CallbackQuery, session: AsyncSession):
@@ -167,23 +173,27 @@ async def show_forecast_graph(callback: types.CallbackQuery, session: AsyncSessi
     result = await session.execute(stmt)
     item = result.scalar_one_or_none()
     if len(item.history) < 3:
-        await callback.answer("Недостаточно данных",show_alert=True)
+        await callback.answer("Недостаточно данных", show_alert=True)
         return
     original_prices = [h.price for h in item.history]
-    filtered_prices = [h.kalman_price for h in item.history if h.kalman_price is not None]
-    graph_buffer = plot_results(original_prices,filtered_prices)
-    photo = types.BufferedInputFile(graph_buffer.getvalue(),filename="forecast.png")
-    await callback.message.answer_photo(photo=photo,caption=f"Прогноз цены: {item.name}")
+    filtered_prices = [
+        h.kalman_price for h in item.history if h.kalman_price is not None]
+    graph_buffer = plot_results(original_prices, filtered_prices)
+    photo = types.BufferedInputFile(
+        graph_buffer.getvalue(), filename="forecast.png")
+    await callback.message.answer_photo(photo=photo, caption=f"Прогноз цены: {item.name}")
     await callback.answer()
+
 
 @router.callback_query(F.data.startswith("notifications_"))
 async def notifications_menu(callback: types.CallbackQuery):
     item_id = int(callback.data.split("_")[1])
-    await callback.message.answer("Выберите режим уведомлений:",reply_markup=get_notifications_keyboard(item_id))
+    await callback.message.answer("Выберите режим уведомлений:", reply_markup=get_notifications_keyboard(item_id))
     await callback.answer()
 
+
 @router.callback_query(F.data.startswith("notify_type_"))
-async def set_notification_type(callback: types.CallbackQuery,session: AsyncSession):
+async def set_notification_type(callback: types.CallbackQuery, session: AsyncSession):
     _, _, notification_type, item_id = callback.data.split("_")
     item_id = int(item_id)
     stmt = (
@@ -203,4 +213,27 @@ async def set_notification_type(callback: types.CallbackQuery,session: AsyncSess
         "down": "Уведомления о падении включены"
     }
 
-    await callback.answer(labels[notification_type],show_alert=True)
+    await callback.answer(labels[notification_type], show_alert=True)
+
+
+@router.callback_query(F.data.startswith("remove_"))
+async def remove_item_from_watchlist(callback: types.CallbackQuery, session: AsyncSession):
+    item_id = int(callback.data.split("_")[1])
+    stmt = (
+        select(Watchlist)
+        .join(User)
+        .where(
+            User.telegram_id == str(callback.from_user.id),
+            Watchlist.item_id == item_id
+        )
+    )
+    result = await session.execute(stmt)
+    watch = result.scalar_one_or_none()
+    if not watch:
+        await callback.answer("Предмет уже удалён.", show_alert=True)
+        return
+
+    await session.delete(watch)
+    await session.commit()
+    await callback.message.delete()
+    await callback.answer("Предмет удалён из отслеживания.", show_alert=True)

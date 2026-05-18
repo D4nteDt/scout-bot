@@ -4,6 +4,7 @@ from database.models import Item
 from typing import List
 from bot.callbacks import ItemCallback
 
+
 def get_my_items_keyboard(items: List["Item"]) -> InlineKeyboardMarkup:
     buttons = []
     for item in items:
@@ -19,41 +20,48 @@ def get_my_items_keyboard(items: List["Item"]) -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
+
 def get_item_card_keyboard(item_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(
-                    text="График",
-                    callback_data=f"graph_{item_id}")],
+                text="График",
+                callback_data=f"graph_{item_id}")],
             [InlineKeyboardButton(
-                    text="Уведомления",
-                    callback_data=f"notifications_{item_id}")],
+                text="Уведомления",
+                callback_data=f"notifications_{item_id}")],
             [InlineKeyboardButton(
-                    text="Закрыть",
-                    callback_data="close_item_info")]
+                text="Удалить",
+                callback_data=f"remove_{item_id}")],
+            [InlineKeyboardButton(
+                text="Закрыть",
+                callback_data="close_item_info")]
         ]
     )
+
 
 def get_notifications_keyboard(item_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(
-                    text="Без уведомлений",
-                    callback_data=f"notify_type_none_{item_id}")],
+                text="Без уведомлений",
+                callback_data=f"notify_type_none_{item_id}")],
             [InlineKeyboardButton(
-                    text="Рост цены",
-                    callback_data=f"notify_type_up_{item_id}")],
+                text="Рост цены",
+                callback_data=f"notify_type_up_{item_id}")],
             [InlineKeyboardButton(
-                    text="Падение цены",
-                    callback_data=f"notify_type_down_{item_id}")],
+                text="Падение цены",
+                callback_data=f"notify_type_down_{item_id}")],
             [InlineKeyboardButton(
-                    text="Закрыть",
-                    callback_data="close_item_info")]
+                text="Закрыть",
+                callback_data="close_item_info")]
         ]
     )
+
 
 private = [
     BotCommand(command="start", description="Запустить бота"),
     BotCommand(command="add", description="Добавить скин в список отслеживаемых"),
-    BotCommand(command="my_items", description="Список отслеживаемых предметов")
+    BotCommand(command="my_items",
+               description="Список отслеживаемых предметов")
 ]

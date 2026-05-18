@@ -4,42 +4,47 @@ from urllib.parse import quote
 import logging
 from urllib.parse import urlparse, unquote
 
+
 def parse_steam_market_link(link: str):
-        parsed = urlparse(link)
-        parts = parsed.path.split("/")
-        try:
-            listings_index = parts.index("listings")
-        except ValueError:
-            return None
-        try:
-            appid = int(parts[listings_index + 1])
-        except Exception:
-            return None
-        try:
-            market_hash_name = unquote(parts[listings_index + 2])
-        except Exception:
-            return None
-        return {
+    parsed = urlparse(link)
+    parts = parsed.path.split("/")
+    try:
+        listings_index = parts.index("listings")
+    except ValueError:
+        return None
+    try:
+        appid = int(parts[listings_index + 1])
+    except Exception:
+        return None
+    try:
+        market_hash_name = unquote(parts[listings_index + 2])
+    except Exception:
+        return None
+    return {
         "appid": appid,
         "market_hash_name": market_hash_name
     }
 
+
 class SteamFetcher:
-    def __init__(self, currency: int = 5, max_concurrent = 5):
+    def __init__(self, currency: int = 5, max_concurrent=5):
         self.currency = currency
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.base_url = "https://steamcommunity.com/market/priceoverview/"
 
     def _clean_price(self, price_str: str) -> float:
-        if not price_str: return 0.0
-        clean_str = "".join(c for c in price_str[:-1] if c.isdigit() or c in ".,")
+        if not price_str:
+            return 0.0
+        clean_str = "".join(
+            c for c in price_str[:-1] if c.isdigit() or c in ".,")
         try:
             return float(clean_str.replace(",", "."))
         except ValueError:
             return 0.0
 
     def _clean_volume(self, volume_str: str) -> int:
-        if not volume_str: return 0
+        if not volume_str:
+            return 0
         return int(volume_str.replace(",", "").replace(".", ""))
 
     async def fetch_item(self, appid: int, item_market_hash_name: str) -> dict:
@@ -51,18 +56,21 @@ class SteamFetcher:
 
                 async with session.get(url) as response:
                     if response.status != 200:
-                        logging.info(f"Ошибка сети для {item_market_hash_name}: {response.status}")
+                        logging.info(
+                            f"Ошибка сети для {item_market_hash_name}: {response.status}")
                         return None
-            
+
                     data = await response.json()
-                    
+
                     if not data or not data.get("success"):
-                        logging.info(f"Steam API returned no success for {item_market_hash_name}. Data: {data}")
+                        logging.info(
+                            f"Steam API returned no success for {item_market_hash_name}. Data: {data}")
                         return None
-                    
+
                     volume = self._clean_volume(data.get("volume"))
                     if volume <= 0:
-                        logging.info(f"Steam API returned 0 or negative volume for {item_market_hash_name}. Volume: {volume}")
+                        logging.info(
+                            f"Steam API returned 0 or negative volume for {item_market_hash_name}. Volume: {volume}")
                         return None
 
                     display_name = data.get("item_name", item_market_hash_name)
@@ -76,15 +84,15 @@ class SteamFetcher:
                         "median": median,
                         "volume": volume
                     }
-    
+
     async def fetch_all(self, items):
 
         tasks = [
             self.fetch_item(
-            item["appid"],
-            item["market_hash_name"]
+                item["appid"],
+                item["market_hash_name"]
             )
             for item in items
-    ]
+        ]
 
         return await asyncio.gather(*tasks)

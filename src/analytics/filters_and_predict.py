@@ -5,12 +5,14 @@ import matplotlib.pyplot as plt
 import json
 import io
 
-def calculate_local_stats(data_window:list) -> tuple[float, float]:
+
+def calculate_local_stats(data_window: list) -> tuple[float, float]:
     if not data_window:
         return 0.0, 0.0
     local_median = float(median(data_window))
     local_mad = float(median(abs(array(data_window) - local_median)))
     return local_median, local_mad
+
 
 class Kalman_filter:
     def __init__(self, R: float = 0.1, Q: float = 1.0):
@@ -20,7 +22,7 @@ class Kalman_filter:
         self._kf.R = array([[R]])
         self._kf.Q = Q_discrete_white_noise(dim=2, dt=1., var=Q)
         self._kf.P = 1000.0
-    
+
     def initialize_state(self, initial_price: float) -> dict:
         self._kf.x = array([[initial_price], [0.]])
         self._kf.P = self._kf.P * 1000.0
@@ -31,20 +33,21 @@ class Kalman_filter:
 
     def get_state_as_json(self) -> tuple[str, str]:
         return json.dumps(self._kf.x.tolist()), json.dumps(self._kf.P.tolist())
-    
+
     def update(self, measurement: float) -> float:
         self._kf.predict()
         self._kf.update(measurement)
         return float(self._kf.x[0, 0])
-    
+
     def predict_state(self, steps: int = 1) -> tuple[float, float]:
         for i in range(steps):
             self._kf.predict()
         predicted_price = float(self._kf.x[0, 0])
         predicted_trend = float(self._kf.x[1, 0])
         return predicted_price, predicted_trend
-    
-def plot_results(original:list , filtered: list):
+
+
+def plot_results(original: list, filtered: list):
     plt.figure(figsize=(12, 6))
     plt.plot(original, label='Original', color='blue', alpha=0.4)
     plt.plot(filtered, label='Filtered', color='red', linewidth=2)

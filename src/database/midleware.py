@@ -2,6 +2,7 @@ from aiogram import BaseMiddleware
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from typing import Callable, Dict, Any, Awaitable
 
+
 class DbSessionMiddleware(BaseMiddleware):
     def __init__(self, session_pool: async_sessionmaker):
         super().__init__()
