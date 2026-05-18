@@ -5,9 +5,9 @@ from sqlalchemy import select
 from analytics.filters_and_predict import plot_results
 from parser.fetcher import parse_steam_market_link
 from database.requests import get_or_create_user, get_or_create_item
-from database.models import User, Item, ItemHistory
+from database.models import User, Item, Watchlist
 from sqlalchemy.ext.asyncio import AsyncSession
-from bot.keyboards import get_my_items_keyboard
+from bot.keyboards import get_my_items_keyboard, get_item_card_keyboard, get_notifications_keyboard
 from processor import OracleProcessor
 from bot.callbacks import ItemCallback
 import logging
@@ -66,21 +66,20 @@ async def add_skin(message: types.Message, session: AsyncSession):
     user_stmt = (
         select(User)
         .where(User.telegram_id == str(message.from_user.id))
-        .options(selectinload(User.watchlist))
+        .options(selectinload(User.watchlist)
+        .selectinload(Watchlist.item)
+        )
     )
 
     result = await session.execute(user_stmt)
-
     user = result.scalar_one_or_none()
-
-    if item in user.watchlist:
-        await message.answer(
-            "Предмет уже отслеживается."
-        )
+    already_exists = any(watch.item_id == item.id for watch in user.watchlist)
+    if already_exists:
+        await message.answer("Предмет уже отслеживается.")
         return
 
-    user.watchlist.append(item)
-
+    watch = Watchlist(item=item, notification_type="none")
+    user.watchlist.append(watch)
     await session.commit()
 
     await message.answer(
@@ -94,6 +93,7 @@ async def cmd_my_items(message: types.Message, session: AsyncSession):
     user_id_str = str(message.from_user.id)
     user_stmt = select(User).where(User.telegram_id == user_id_str).options(
         selectinload(User.watchlist)
+        .selectinload(Watchlist.item)
     )
     result = await session.execute(user_stmt)
     user = result.scalar_one_or_none()
@@ -101,7 +101,7 @@ async def cmd_my_items(message: types.Message, session: AsyncSession):
     if not user:
         await message.answer("Пожалуйста, зарегистрируйтесь через /start")
         return
-    items = user.watchlist 
+    items = [watch.item for watch in user.watchlist] 
     if not items:
         await message.answer("Вы пока не отслеживаете ни одного предмета. Используйте /add [Ссылка на предмет].")
         return
@@ -116,9 +116,7 @@ async def show_item_info(
 ):
     item_id = callback_data.item_id
 
-    item_stmt = select(Item).where(Item.id == item_id).options(
-        selectinload(Item.history.and_(ItemHistory.is_outlier == False))
-    )
+    item_stmt = select(Item).where(Item.id == item_id).options(selectinload(Item.history))
     result = await session.execute(item_stmt)
     item = result.scalar_one_or_none()
 
@@ -131,7 +129,7 @@ async def show_item_info(
 
     message_text = f"**Информация по предмету: {item.name}**\n"
     message_text += f"Текущая цена: {item.current_price:.2f} ₽\n" if item.current_price is not None else "Текущая цена сейчас недоступна"
-    message_text += f"Oracle цена: {item.oracle_price:.2f} ₽\n" if item.oracle_price is not None else "Oracle цена сейчас недоступна"
+    message_text += f"Сглаженная цена: {item.oracle_price:.2f} ₽\n" if item.oracle_price is not None else "Oracle цена сейчас недоступна"
     message_text += f"Тренд: {item.trend:.2f}\n" if item.trend is not None else "Trend сейчас недоступен"
     message_text += f"История записей: {history_count}\n"
 
@@ -149,7 +147,7 @@ async def show_item_info(
             message_text += "Прогноз на завтра: _Недоступен_\n"
         
 
-    await callback.message.edit_text(message_text, reply_markup=callback.message.reply_markup, parse_mode="Markdown")
+    await callback.message.answer(message_text, reply_markup=get_item_card_keyboard(item.id), parse_mode="Markdown")
     await callback.answer()
 
 @router.callback_query(F.data == "close_item_info")
@@ -168,37 +166,41 @@ async def show_forecast_graph(callback: types.CallbackQuery, session: AsyncSessi
 
     result = await session.execute(stmt)
     item = result.scalar_one_or_none()
-    if not item:
-        await callback.answer(
-            "Предмет не найден",
-            show_alert=True
-        )
-        return
     if len(item.history) < 3:
-        await callback.answer(
-            "Недостаточно данных",
-            show_alert=True
-        )
+        await callback.answer("Недостаточно данных",show_alert=True)
         return
-    original_prices = [
-        h.price
-        for h in item.history
-    ]
-    filtered_prices = [
-        h.kalman_price
-        for h in item.history
-        if h.kalman_price is not None
-    ]
-    graph_buffer = plot_results(
-        original_prices,
-        filtered_prices
-    )
-    photo = types.BufferedInputFile(
-        graph_buffer.getvalue(),
-        filename="forecast.png"
-    )
-    await callback.message.answer_photo(
-        photo=photo,
-        caption=f"📈 Прогноз цены: {item.name}"
-    )
+    original_prices = [h.price for h in item.history]
+    filtered_prices = [h.kalman_price for h in item.history if h.kalman_price is not None]
+    graph_buffer = plot_results(original_prices,filtered_prices)
+    photo = types.BufferedInputFile(graph_buffer.getvalue(),filename="forecast.png")
+    await callback.message.answer_photo(photo=photo,caption=f"Прогноз цены: {item.name}")
     await callback.answer()
+
+@router.callback_query(F.data.startswith("notifications_"))
+async def notifications_menu(callback: types.CallbackQuery):
+    item_id = int(callback.data.split("_")[1])
+    await callback.message.answer("Выберите режим уведомлений:",reply_markup=get_notifications_keyboard(item_id))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("notify_type_"))
+async def set_notification_type(callback: types.CallbackQuery,session: AsyncSession):
+    _, _, notification_type, item_id = callback.data.split("_")
+    item_id = int(item_id)
+    stmt = (
+        select(User)
+        .where(User.telegram_id == str(callback.from_user.id))
+        .options(selectinload(User.watchlist))
+    )
+
+    result = await session.execute(stmt)
+    user = result.scalar_one()
+    watch = next(watch for watch in user.watchlist if watch.item_id == item_id)
+    watch.notification_type = notification_type
+    await session.commit()
+    labels = {
+        "none": "Уведомления отключены",
+        "up": "Уведомления о росте включены",
+        "down": "Уведомления о падении включены"
+    }
+
+    await callback.answer(labels[notification_type],show_alert=True)

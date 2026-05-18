@@ -1,12 +1,16 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
-from database.models import Item, ItemHistory
+from sqlalchemy.orm import selectinload
+from database.models import Item, ItemHistory, Watchlist
 from analytics.filters_and_predict import calculate_local_stats, Kalman_filter
 from sqlalchemy import select
 
 class OracleProcessor:
-    def __init__(self, sql_session: AsyncSession):
+    def __init__(self, sql_session: AsyncSession, bot):
+        self.signal_threshold = 15
+        self.signal_delta_threshold = 5
+        self.bot = bot
         self.session = sql_session
         self.window_size = 101
         self.outlier_persistence_threshold = 5
@@ -51,14 +55,64 @@ class OracleProcessor:
         except Exception as e:
             logging.error(f"Failed to predict Kalman state for item {item_id}: {e}")
             return None
+        
+    async def process_notifications(self, item: Item):
+        prediction = await self.get_kalman_prediction(item.id, steps=5)
+        if prediction is None:
+            return
+        predicted_price, _ = prediction
+        notifications_updated = False
+
+        if (predicted_price is None or item.current_price is None):
+            return
+
+        signal_percent = ((predicted_price - item.current_price)/ item.current_price) * 100
+        for watch in item.watchers:
+            if watch.notification_type == "none":
+                continue
+
+            if (watch.notification_type == "up" and signal_percent > self.signal_threshold):
+                continue
+
+            elif (watch.notification_type == "down" and signal_percent < -self.signal_threshold):
+                continue
+
+            if (watch.last_signal_percent is not None and abs(signal_percent - watch.last_signal_percent) < self.signal_delta_threshold):
+                continue
+
+            await self.bot.send_message(
+                chat_id=watch.user.telegram_id,
+                text=(
+                    f"Сигнал для {item.name}\n\n"
+                    f"Текущая цена: {item.current_price:.2f} ₽\n"
+                    f"Предсказанная цена: {predicted_price:.2f} ₽\n"
+                    f"Потенциал: {signal_percent:.2f}%"
+                    )
+            )
+
+            watch.last_signal_percent = signal_percent
+            await self.session.commit()
 
     async def update_item_price(self, item_id: int, raw_price: float, volume: int):
-        item = await self.session.get(Item, item_id)
+        stmt = (
+            select(Item)
+            .where(Item.id == item_id)
+            .options(
+            selectinload(Item.watchers)
+            .selectinload(Watchlist.user))
+)
+
+        result = await self.session.execute(stmt)
+        item = result.scalar_one_or_none()
         if not item:
             logging.warning(f"Item with ID {item_id} not found. Skipping price update.")
             return
 
-        result = await self.session.execute(select(ItemHistory).filter_by(item_id=item_id).order_by(ItemHistory.timestamp.desc()).limit(self.window_size))
+        result = await self.session.execute(select(ItemHistory)
+                                            .filter_by(item_id=item_id)
+                                            .order_by(ItemHistory.timestamp
+                                            .desc())
+                                            .limit(self.window_size))
         history_entries = result.scalars().all()
         past_prices = [h.price for h in reversed(history_entries)]
         is_outlier, price_for_kalman = self.__determine_price_for_kalman(past_prices, raw_price)
@@ -90,5 +144,6 @@ class OracleProcessor:
         item.kalman_state_p = new_kalman_state_P_json
         try:
             await self.session.commit()
+            await self.process_notifications(item)
         except Exception as e:
             await self.session.rollback()

@@ -89,7 +89,7 @@ async def run_parser_loop(session: AsyncSession):
             fetched_data = [d for d in fetched_data_raw if d is not None]
             if fetched_data:
                 async with AsyncSessionLocal() as write_session:
-                    processor = OracleProcessor(sql_session=write_session)
+                    processor = OracleProcessor(sql_session=write_session, bot=bot)
                     await process_and_update_prices(write_session, processor, fetched_data)
             else:
                 logging.info("No valid data fetched from Steam for any item. Waiting...")

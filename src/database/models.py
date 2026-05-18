@@ -5,12 +5,21 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 class Base(DeclarativeBase):
     pass
 
-watchlists = Table(
-    "watchlists",
-    Base.metadata,
-    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
-    Column("item_id", ForeignKey("items.id", ondelete="CASCADE"), primary_key=True),
-)
+class Watchlist(Base):
+    __tablename__ = "watchlists"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"),primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"),primary_key=True)
+    notification_type: Mapped[str] = mapped_column(String(20), default="none")
+    last_signal_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    user: Mapped["User"] = relationship(back_populates="watchlist")
+    item: Mapped["Item"] = relationship(back_populates="watchers")
+    def __repr__(self):
+        return (
+            f"<Watchlist(user_id={self.user_id}, "
+            f"item_id={self.item_id}, "
+            f"notification_type={self.notification_type})>"
+        )
 
 class User(Base):
     __tablename__ = "users"
@@ -18,7 +27,7 @@ class User(Base):
     telegram_id: Mapped[str] = mapped_column(String(100), unique=True)
     username: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    watchlist: Mapped[list["Item"]] = relationship(secondary=watchlists)
+    watchlist: Mapped[list["Watchlist"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     def __repr__(self):
         return f"<User(id={self.id}, tg_id={self.telegram_id})>"
 
@@ -35,6 +44,7 @@ class Item(Base):
     kalman_state_x: Mapped[str | None] = mapped_column(Text)
     kalman_state_p: Mapped[str | None] = mapped_column(Text)
     last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    watchers:  Mapped[list["Watchlist"]] = relationship(back_populates="item", cascade="all, delete-orphan")
     def __repr__(self):
         return f"<Item(id={self.id}, name='{self.name}')>"
 
