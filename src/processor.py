@@ -66,14 +66,15 @@ class OracleProcessor:
             return
 
         signal_percent = ((predicted_price - item.current_price)/ item.current_price) * 100
+        signal_percent = round(signal_percent, 2)
         for watch in item.watchers:
-            if watch.notification_type == "none":
+            if watch.notification_type not in ("up", "down"):
                 continue
 
-            if (watch.notification_type == "up" and signal_percent > self.signal_threshold):
+            if (watch.notification_type == "up" and signal_percent < self.signal_threshold):
                 continue
 
-            elif (watch.notification_type == "down" and signal_percent < -self.signal_threshold):
+            elif (watch.notification_type == "down" and signal_percent > -self.signal_threshold):
                 continue
 
             if watch.last_notification_at is not None:
