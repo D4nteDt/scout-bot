@@ -104,7 +104,6 @@ async def run_parser_loop(session: AsyncSession):
             await asyncio.sleep(240)
 
 async def main():
-    await init_db(engine)
     dp.update.middleware(DbSessionMiddleware(AsyncSessionLocal))
     dp.include_router(router)
     await bot.set_my_commands(private)

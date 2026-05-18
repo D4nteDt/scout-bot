@@ -11,7 +11,7 @@ class Watchlist(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"),primary_key=True)
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"),primary_key=True)
     notification_type: Mapped[str] = mapped_column(String(20), default="none")
-    last_signal_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_notification_at = Column(DateTime, nullable=True)
     user: Mapped["User"] = relationship(back_populates="watchlist")
     item: Mapped["Item"] = relationship(back_populates="watchers")
     def __repr__(self):

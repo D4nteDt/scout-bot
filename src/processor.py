@@ -61,7 +61,6 @@ class OracleProcessor:
         if prediction is None:
             return
         predicted_price, _ = prediction
-        notifications_updated = False
 
         if (predicted_price is None or item.current_price is None):
             return
@@ -77,8 +76,10 @@ class OracleProcessor:
             elif (watch.notification_type == "down" and signal_percent < -self.signal_threshold):
                 continue
 
-            if (watch.last_signal_percent is not None and abs(signal_percent - watch.last_signal_percent) < self.signal_delta_threshold):
-                continue
+            if watch.last_notification_at is not None:
+                delta = datetime.utcnow() - watch.last_notification_at
+                if delta.total_seconds() < 1800:
+                    continue
 
             await self.bot.send_message(
                 chat_id=watch.user.telegram_id,
@@ -90,7 +91,7 @@ class OracleProcessor:
                     )
             )
 
-            watch.last_signal_percent = signal_percent
+            watch.last_notification_at = datetime.utcnow()
             await self.session.commit()
 
     async def update_item_price(self, item_id: int, raw_price: float, volume: int):
