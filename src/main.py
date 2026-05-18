@@ -59,7 +59,11 @@ async def process_and_update_prices(session: AsyncSession, processor: OracleProc
                 predicted_data = await processor.get_kalman_prediction(item_id, steps=prediction_steps)
 
                 if predicted_data:
-                    predicted_price, predicted_trend = predicted_data
+                    (
+                        predicted_price,
+                        predicted_trend,
+                        forecast_uncertainty,
+                    ) = predicted_data
                     logging.info(
                         f"Prediction ({prediction_steps} steps): Price={predicted_price:.2f}, Trend={predicted_trend:.4f}")
                 else:

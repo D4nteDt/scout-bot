@@ -134,8 +134,8 @@ async def show_item_info(
 
     message_text = f"**Информация по предмету: {item.name}**\n"
     message_text += f"Текущая цена: {item.current_price:.2f} ₽\n" if item.current_price is not None else "Текущая цена сейчас недоступна"
-    message_text += f"Сглаженная цена: {item.oracle_price:.2f} ₽\n" if item.oracle_price is not None else "Oracle цена сейчас недоступна"
-    message_text += f"Тренд: {item.trend:.2f}\n" if item.trend is not None else "Trend сейчас недоступен"
+    message_text += f"Сглаженная цена: {item.oracle_price:.2f} ₽\n" if item.oracle_price is not None else "Сглаженная цена сейчас недоступна"
+    message_text += f"Тренд: {item.trend:.2f}\n" if item.trend is not None else "Тренд сейчас недоступен"
     message_text += f"История записей: {history_count}\n"
 
     if history_count < 101:
@@ -147,9 +147,9 @@ async def show_item_info(
         prediction_tomorrow = await oracle_processor.get_kalman_prediction(item.id, steps=5)
         if prediction_tomorrow:
             predicted_price_tomorrow, predicted_trend_tomorrow = prediction_tomorrow
-            message_text += f"Прогноз на завтра: {predicted_price_tomorrow:.2f} ₽ (Тренд: {predicted_trend_tomorrow:.2f})\n"
+            message_text += f"Прогноз через 20 минут: {predicted_price_tomorrow:.2f} ₽ (Тренд: {predicted_trend_tomorrow:.2f})\n"
         else:
-            message_text += "Прогноз на завтра: _Недоступен_\n"
+            message_text += "Прогноз недоступен"
 
     await callback.message.answer(message_text, reply_markup=get_item_card_keyboard(item.id), parse_mode="Markdown")
     await callback.answer()
@@ -176,8 +176,7 @@ async def show_forecast_graph(callback: types.CallbackQuery, session: AsyncSessi
         await callback.answer("Недостаточно данных", show_alert=True)
         return
     original_prices = [h.price for h in item.history]
-    filtered_prices = [
-        h.kalman_price for h in item.history if h.kalman_price is not None]
+    filtered_prices = [h.kalman_price for h in item.history if h.kalman_price is not None]
     graph_buffer = plot_results(original_prices, filtered_prices)
     photo = types.BufferedInputFile(
         graph_buffer.getvalue(), filename="forecast.png")
