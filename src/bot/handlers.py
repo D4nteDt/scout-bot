@@ -138,16 +138,16 @@ async def show_item_info(
     message_text += f"Тренд: {item.trend:.2f}\n" if item.trend is not None else "Тренд сейчас недоступен"
     message_text += f"История записей: {history_count}\n"
 
-    if history_count < 101:
-        message_text += "\n_Недостаточно данных для прогноза (требуется 101+ чистых точек)._\n"
-        message_text += "Все данные парсера актуальны."
+    if history_count < 31:
+        message_text += "\n_Недостаточно данных для прогноза (требуется 31+ чистых точек)._\n"
+        message_text += "Все данные парсера актуальны. Рекомендуемое количество точек: 500"
     else:
         message_text += "\n**Прогнозы:**\n"
         oracle_processor = OracleProcessor(session)
         prediction_tomorrow = await oracle_processor.get_kalman_prediction(item.id, steps=5)
         if prediction_tomorrow:
-            predicted_price_tomorrow, predicted_trend_tomorrow = prediction_tomorrow
-            message_text += f"Прогноз через 20 минут: {predicted_price_tomorrow:.2f} ₽ (Тренд: {predicted_trend_tomorrow:.2f})\n"
+            predicted_price_tomorrow, predicted_trend_tomorrow, forecast_uncertainty = prediction_tomorrow
+            message_text += f"Прогноз через 20 минут: {predicted_price_tomorrow:.2f} ₽ (Тренд: {predicted_trend_tomorrow:.2f})\n Неопределенность прогноза: {forecast_uncertainty}\n"
         else:
             message_text += "Прогноз недоступен"
 
