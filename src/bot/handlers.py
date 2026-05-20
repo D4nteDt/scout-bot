@@ -1,4 +1,4 @@
-from aiogram import Router, F, types
+from aiogram import Router, F, types, Bot
 from aiogram.filters import Command
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
@@ -116,7 +116,8 @@ async def cmd_my_items(message: types.Message, session: AsyncSession):
 async def show_item_info(
     callback: types.CallbackQuery,
     callback_data: ItemCallback,
-    session: AsyncSession
+    session: AsyncSession,
+    bot: Bot
 ):
     item_id = callback_data.item_id
 
@@ -143,7 +144,7 @@ async def show_item_info(
         message_text += "Все данные парсера актуальны. Рекомендуемое количество точек: 500"
     else:
         message_text += "\n**Прогнозы:**\n"
-        oracle_processor = OracleProcessor(session)
+        oracle_processor = OracleProcessor(session, bot)
         prediction_tomorrow = await oracle_processor.get_kalman_prediction(item.id, steps=5)
         if prediction_tomorrow:
             predicted_price_tomorrow, predicted_trend_tomorrow, forecast_uncertainty = prediction_tomorrow
