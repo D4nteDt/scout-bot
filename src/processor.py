@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 class OracleProcessor:
     def __init__(self, sql_session: AsyncSession, bot):
-        self.signal_threshold = 15
+        self.signal_threshold = 3
         self.signal_delta_threshold = 5
         self.bot = bot
         self.session = sql_session
