@@ -23,7 +23,7 @@ class OracleProcessor:
 
     def get_kalman_filter(self, item_id: int) -> Kalman_filter:
         if item_id not in self.kalman_filters:
-            self.kalman_filters[item_id] = Kalman_filter(R=10.0, Q=0.05)
+            self.kalman_filters[item_id] = Kalman_filter()
 
         return self.kalman_filters[item_id]
 
