@@ -14,6 +14,14 @@ import logging
 
 router = Router()
 
+@router.message(Command("help"))
+async def cmd_help(message: types.Message, session: AsyncSession):
+    help_text = "Ссылка на репозеторий на GitHub: https://github.com/D4nteDt/scout-bot \n\n" \
+    "Список команд:\n" \
+    "/start - регистрация пользователя\n" \
+    "/my_items - список отслеживаемых внутриигровых предметов\n" \
+    "/add [Ссылка на внутриигровой предмет] - добавление предмета в список отслеживаемых\n"
+    await message.answer(help_text)
 
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, session: AsyncSession):
@@ -38,7 +46,10 @@ async def add_skin(message: types.Message, session: AsyncSession):
 
     if not link:
         await message.answer(
-            "Отправьте ссылку Steam Market."
+            "Добавьте к команде ссылку на внутриигровой предмет в формате:\n\n" \
+            "/add [Ссылка на предмет с торговой площадки]\n\n" \
+            "Пример:\n" \
+            "/add https://steamcommunity.com/market/listings/440/Mann%20Co.%20Supply%20Crate%20Key"
         )
         return
 

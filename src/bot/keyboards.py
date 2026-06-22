@@ -61,7 +61,5 @@ def get_notifications_keyboard(item_id: int) -> InlineKeyboardMarkup:
 
 private = [
     BotCommand(command="start", description="Запустить бота"),
-    BotCommand(command="add", description="Добавить скин в список отслеживаемых"),
-    BotCommand(command="my_items",
-               description="Список отслеживаемых предметов")
+    BotCommand(command="help", description="Список основных комманд")
 ]
