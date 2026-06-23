@@ -17,7 +17,7 @@ def calculate_local_stats(data_window: list) -> tuple[float, float]:
 
 
 class Kalman_filter:
-    def __init__(self, R: float = 5.0, Q: float = 0.5, dt: float = 240.0):
+    def __init__(self, R: float = 2.0, Q: float = 0.005, dt: float = 1.0, initial_P: float = 48_000_000.0):
         self._kf = KalmanFilter(2, 1)
 
         self._kf.F = array([
@@ -33,15 +33,15 @@ class Kalman_filter:
             var=Q,
         )
 
-        self._kf.P = np.eye(2) * 2.0
+        self._kf.P = np.eye(2) * initial_P
 
-    def initialize_state(self, initial_price: float):
+    def initialize_state(self, initial_price: float, initial_P: float = 48_000_000.0):
         self._kf.x = array([
             [initial_price],
             [0.],
         ])
 
-        self._kf.P = np.eye(2) * 2.0
+        self._kf.P = np.eye(2) * initial_P
 
     def set_state_from_json(self, x_json: str, P_json: str):
         self._kf.x = array(json.loads(x_json))

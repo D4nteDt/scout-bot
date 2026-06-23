@@ -80,13 +80,13 @@ class OracleProcessor:
                     f"for item {item.id}: {e}"
                 )
 
-                kf.initialize_state(price_for_kalman)
+                kf.initialize_state(price_for_kalman, initial_P = 48_000_000.0)
                 previous_kalman_estimation = (
                     price_for_kalman
                 )
 
         else:
-            kf.initialize_state(price_for_kalman)
+            kf.initialize_state(price_for_kalman, 48_000_000.0)
             previous_kalman_estimation = (
                 price_for_kalman
             )
@@ -197,7 +197,7 @@ class OracleProcessor:
                     f"Сигнал для {item.name}\n\n"
                     f"Текущая цена: "
                     f"{item.current_price:.2f} ₽\n"
-                    f"Oracle цена: "
+                    f"Сглаженная цена: "
                     f"{item.oracle_price:.2f} ₽\n"
                     f"Предсказанная цена: "
                     f"{predicted_price:.2f} ₽\n"

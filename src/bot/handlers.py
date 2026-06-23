@@ -14,12 +14,31 @@ import logging
 
 router = Router()
 
+@router.message(Command("test_push"))
+async def cmd_test_push(message: types.Message, session: AsyncSession):
+    push_text = "Сигнал для [Название предмета]\n\n"\
+    "Текущая цена:\n"\
+    "[item.current_price:.2f] ₽\n"\
+    "Сглаженная цена:"\
+    "[item.oracle_price:.2f] ₽\n"\
+    "Предсказанная цена:"\
+    "[predicted_price:.2f] ₽\n"\
+    "Тренд:"\
+    "[predicted_trend:.4f]\n"\
+    "Уверенность:"\
+    "[confidence:.2f]%\n"\
+    "Неопределенность:"\
+    "[forecast_uncertainty:.2f]\n"\
+    "Потенциал:\n"\
+    "[signal_percent:.2f]%"
+    await message.answer(push_text)
+
 @router.message(Command("help"))
 async def cmd_help(message: types.Message, session: AsyncSession):
     help_text = "Ссылка на репозеторий на GitHub: https://github.com/D4nteDt/scout-bot \n\n" \
-    "Список команд:\n" \
-    "/start - регистрация пользователя\n" \
-    "/my_items - список отслеживаемых внутриигровых предметов\n" \
+    "Список команд:\n\n" \
+    "/start - регистрация пользователя\n\n" \
+    "/my_items - список отслеживаемых внутриигровых предметов\n\n" \
     "/add [Ссылка на внутриигровой предмет] - добавление предмета в список отслеживаемых\n"
     await message.answer(help_text)
 
@@ -192,7 +211,7 @@ async def show_forecast_graph(callback: types.CallbackQuery, session: AsyncSessi
     graph_buffer = plot_results(original_prices, filtered_prices)
     photo = types.BufferedInputFile(
         graph_buffer.getvalue(), filename="forecast.png")
-    await callback.message.answer_photo(photo=photo, caption=f"Прогноз цены: {item.name}")
+    await callback.message.answer_photo(photo=photo, caption=f"График цен для {item.name}")
     await callback.answer()
 
 
@@ -225,6 +244,7 @@ async def set_notification_type(callback: types.CallbackQuery, session: AsyncSes
     }
 
     await callback.answer(labels[notification_type], show_alert=True)
+    await callback.message.delete()
 
 
 @router.callback_query(F.data.startswith("remove_"))
